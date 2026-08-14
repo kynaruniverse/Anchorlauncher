@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.AnchorLauncher" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
-    </style>
-
-    <style name="Theme.Material3.DayNight.NoActionBar" parent="Theme.Material3.Dark.NoActionBar">
-        <!-- Fallback to ensure the manifest finds it -->
+<resources>
+    <!-- The main theme for the launcher -->
+    <style name="Theme.AnchorLauncher" parent="android:Theme.DeviceDefault.NoActionBar">
+        <!-- Optional: Make the status bar transparent for a cleaner look -->
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
     </style>
 </resources>
