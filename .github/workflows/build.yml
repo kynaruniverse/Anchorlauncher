@@ -2,30 +2,31 @@ name: Build ANCHOR Full
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: set up JDK 17
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      # This step generates the gradlew and jar files if they are missing
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.2
+      # This is the magic step: It installs Gradle 8.2 specifically
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.2
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
+      # We run 'gradle' directly instead of './gradlew' 
+      # because the wrapper files are missing in your repo.
+      - name: Build APK
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
