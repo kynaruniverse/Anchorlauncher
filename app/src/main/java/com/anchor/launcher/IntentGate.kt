@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -12,9 +13,14 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun IntentGate(
     appName: String,
+    frictionLevel: String,
     onProceed: () -> Unit,
     onCancel: () -> Unit
 ) {
+    var step by remember { mutableStateOf(if (frictionLevel == "LIGHT") 2 else 1) }
+    var selectedReason by remember { mutableStateOf<String?>(null) }
+    var selectedDuration by remember { mutableStateOf<String?>(null) }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background.copy(alpha = 0.98f)
@@ -30,48 +36,62 @@ fun IntentGate(
                 text = appName.uppercase(),
                 fontSize = 20.sp,
                 letterSpacing = 4.sp,
-                color = MaterialTheme.colorScheme.secondary
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                text = "Is this what you intended?",
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Light
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
             
             Spacer(modifier = Modifier.height(48.dp))
 
-            val reasons = listOf(
-                "I have a specific task",
-                "I'm looking for information",
-                "Quick check (under 2 mins)",
-                "I just want to browse"
-            )
+            if (step == 1) {
+                // Step 1: Why?
+                Text(
+                    text = "Why are you opening this?",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.secondary,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(32.dp))
 
-            reasons.forEach { reason ->
-                OutlinedButton(
-                    onClick = {
-                        if (reason == "I just want to browse") {
-                            onCancel()
-                        } else {
+                val reasons = listOf("Something specific", "Search for info", "Just browsing")
+                reasons.forEach { reason ->
+                    OutlinedButton(
+                        onClick = { 
+                            selectedReason = reason
+                            if (frictionLevel == "INTENT") onProceed() else step = 2
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
+                        Text(reason.uppercase(), letterSpacing = 1.sp)
+                    }
+                }
+            } else if (step == 2) {
+                // Step 2: How long?
+                Text(
+                    text = "How long do you need?",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.secondary,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+
+                val durations = listOf("10 Minutes", "20 Minutes", "30 Minutes", "No Limit")
+                durations.forEach { duration ->
+                    OutlinedButton(
+                        onClick = { 
+                            selectedDuration = duration
                             onProceed()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                ) {
-                    Text(reason, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
+                        Text(duration.uppercase(), letterSpacing = 1.sp)
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-
+            
             TextButton(onClick = onCancel) {
-                Text("NEVERMIND", letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                Text("CANCEL", color = MaterialTheme.colorScheme.secondary, letterSpacing = 2.sp)
             }
         }
     }

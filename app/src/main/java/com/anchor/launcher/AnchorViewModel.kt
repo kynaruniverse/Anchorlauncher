@@ -3,12 +3,14 @@ package com.anchor.launcher
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class AnchorViewModel(application: Application) : AndroidViewModel(application) {
     private val db = Room.databaseBuilder(application, AnchorDatabase::class.java, "anchor-db")
@@ -22,29 +24,139 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     var focusTimeRemaining by mutableIntStateOf(0)
     
     var pendingAppLaunch by mutableStateOf<AppInfo?>(null)
+    var selectedAppForMenu by mutableStateOf<AppInfo?>(null)
 
-    var spaces = mutableStateListOf(
-        Space("personal", "PERSONAL", listOf("com.android.chrome")),
-        Space("work", "WORK", listOf("com.google.android.gm")),
-        Space("evening", "EVENING", listOf("com.spotify.music"))
-    )
+    var hiddenApps = mutableStateSetOf<String>()
+    var favoriteApps = mutableStateSetOf<String>()
+    var recentAppPackages = mutableStateListOf<String>()
 
-    val currentSpace get() = spaces.getOrElse(currentSpaceIndex) { spaces[0] }
+    var fontSizeMultiplier by mutableFloatStateOf(1.0f)
+    var letterSpacingExtra by mutableFloatStateOf(0.0f)
+    var isBoldEnabled by mutableStateOf(false)
+
+    var swipeDownAction by mutableStateOf("NOTIFICATIONS")
+    var doubleTapAction by mutableStateOf("NONE")
+
+    // Dynamic Spaces
+    var spaces = mutableStateListOf<Space>()
+
+    // Phase 16: Friction Levels & Reflection
+    var appFrictionLevels = mutableStateMapOf<String, String>()
+    var oneThingReflection by mutableStateOf("")
+    var screenTimeMinutes by mutableIntStateOf(88) // Simulated for MVP
+
+    val currentSpace get() = spaces.getOrElse(currentSpaceIndex) { 
+        if (spaces.isNotEmpty()) spaces[0] else Space("default", "HOME", emptyList())
+    }
 
     init {
         viewModelScope.launch {
-            val savedDensity = dao.getSetting("density_mode")
-            if (savedDensity != null) {
-                densityMode = DensityMode.valueOf(savedDensity)
+            dao.getSetting("density_mode")?.let { densityMode = DensityMode.valueOf(it) }
+            dao.getSetting("font_size")?.let { fontSizeMultiplier = it.toFloatOrNull() ?: 1.0f }
+            dao.getSetting("letter_spacing")?.let { letterSpacingExtra = it.toFloatOrNull() ?: 0.0f }
+            dao.getSetting("bold_enabled")?.let { isBoldEnabled = it.toBoolean() }
+            dao.getSetting("swipe_down_action")?.let { swipeDownAction = it }
+            dao.getSetting("double_tap_action")?.let { doubleTapAction = it }
+            dao.getSetting("one_thing")?.let { oneThingReflection = it }
+            
+            hiddenApps.addAll(dao.getHiddenApps())
+            favoriteApps.addAll(dao.getFavorites())
+
+            // Load Friction Levels
+            dao.getAllFrictionLevels().forEach { 
+                appFrictionLevels[it.packageName] = it.level
             }
+
+            val savedSpaces = dao.getAllSpacesOnce()
+            if (savedSpaces.isEmpty()) {
+                val defaults = listOf(
+                    SpaceEntity("personal", "PERSONAL", "BALANCED"),
+                    SpaceEntity("work", "WORK", "BALANCED")
+                )
+                defaults.forEach { dao.insertSpace(it) }
+                spaces.addAll(defaults.map { Space(it.id, it.name, emptyList()) })
+            } else {
+                spaces.addAll(savedSpaces.map { Space(it.id, it.name, emptyList()) })
+            }
+        }
+    }
+
+    fun setFrictionLevel(packageName: String, level: String) {
+        appFrictionLevels[packageName] = level
+        viewModelScope.launch {
+            dao.setFrictionLevel(AppFrictionEntity(packageName, level))
+        }
+    }
+
+    fun setOneThing(text: String) {
+        oneThingReflection = text
+        updateSetting("one_thing", text)
+    }
+
+    fun addSpace(name: String) {
+        val id = UUID.randomUUID().toString()
+        val newSpace = Space(id, name.uppercase(), emptyList())
+        spaces.add(newSpace)
+        viewModelScope.launch {
+            dao.insertSpace(SpaceEntity(id, name.uppercase(), "BALANCED"))
+        }
+    }
+
+    fun deleteSpace(spaceId: String) {
+        if (spaces.size <= 1) return
+        val index = spaces.indexOfFirst { it.id == spaceId }
+        if (index != -1) {
+            spaces.removeAt(index)
+            if (currentSpaceIndex >= spaces.size) currentSpaceIndex = spaces.size - 1
+            viewModelScope.launch {
+                dao.deleteSpace(spaceId)
+            }
+        }
+    }
+
+    fun updateSetting(key: String, value: String) {
+        viewModelScope.launch {
+            dao.saveSetting(SettingEntity(key, value))
         }
     }
 
     fun setDensity(mode: DensityMode) {
         densityMode = mode
+        updateSetting("density_mode", mode.name)
+    }
+
+    fun toggleHideApp(packageName: String) {
         viewModelScope.launch {
-            dao.saveSetting(SettingEntity("density_mode", mode.name))
+            if (hiddenApps.contains(packageName)) {
+                hiddenApps.remove(packageName)
+                dao.unhideApp(packageName)
+            } else {
+                hiddenApps.add(packageName)
+                dao.hideApp(HiddenAppEntity(packageName))
+            }
         }
+        selectedAppForMenu = null
+    }
+
+    fun toggleFavorite(packageName: String) {
+        viewModelScope.launch {
+            if (favoriteApps.contains(packageName)) {
+                favoriteApps.remove(packageName)
+                dao.removeFavorite(packageName)
+            } else {
+                favoriteApps.add(packageName)
+                dao.addFavorite(FavoriteAppEntity(packageName))
+            }
+        }
+        selectedAppForMenu = null
+    }
+
+    fun uninstallApp(packageName: String, context: Context) {
+        val intent = Intent(Intent.ACTION_DELETE).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        context.startActivity(intent)
+        selectedAppForMenu = null
     }
 
     fun getTasks() = dao.getTasksForSpace(currentSpace.id)
@@ -69,14 +181,35 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    val protectedApps = listOf("youtube", "instagram", "tiktok", "reddit", "twitter", "facebook")
-
     fun handleAppClick(app: AppInfo, context: Context) {
-        val isProtected = protectedApps.any { app.label.contains(it, ignoreCase = true) }
-        if (isProtected) {
-            pendingAppLaunch = app
-        } else {
-            launchApp(app.packageName, context)
+        recentAppPackages.remove(app.packageName)
+        recentAppPackages.add(0, app.packageName)
+        if (recentAppPackages.size > 5) {
+            recentAppPackages.removeAt(5)
+        }
+
+        val friction = appFrictionLevels[app.packageName] ?: "OFF"
+        
+        when (friction) {
+            "OFF" -> launchApp(app.packageName, context)
+            "LIGHT" -> {
+                pendingAppLaunch = app
+            }
+            "INTENT" -> {
+                pendingAppLaunch = app
+            }
+            "TIMER" -> {
+                pendingAppLaunch = app
+            }
+            "BLOCK" -> {
+                // In Focus Mode or Blocked periods
+                if (focusModeActive) {
+                    pendingAppLaunch = app
+                } else {
+                    launchApp(app.packageName, context)
+                }
+            }
+            else -> launchApp(app.packageName, context)
         }
     }
 
@@ -89,28 +222,46 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun executeCommand(command: String, context: Context): Boolean {
-        val parts = command.lowercase().trim().split(" ")
+        val parts = command.lowercase().trim().split(" ", limit = 2)
         if (parts.isEmpty()) return false
         
-        return when (parts[0]) {
+        val action = parts[0]
+        val arg = parts.getOrNull(1) ?: ""
+
+        return when (action) {
             "focus" -> {
-                val minutes = parts.getOrNull(1)?.toIntOrNull() ?: 20
+                val minutes = arg.toIntOrNull() ?: 20
                 startFocus(minutes)
                 true
             }
             "space" -> {
-                val spaceName = parts.getOrNull(1)
-                val index = spaces.indexOfFirst { it.name.equals(spaceName, true) }
+                val index = spaces.indexOfFirst { it.name.equals(arg, true) }
                 if (index != -1) {
                     currentSpaceIndex = index
                     true
                 } else false
             }
             "timer" -> {
-                val minutes = parts.getOrNull(1)?.toIntOrNull() ?: 10
+                val minutes = arg.toIntOrNull() ?: 10
                 val intent = Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
                     putExtra(android.provider.AlarmClock.EXTRA_LENGTH, minutes * 60)
                     putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, false)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                true
+            }
+            "call" -> {
+                val intent = Intent(Intent.ACTION_DIAL).apply {
+                    data = Uri.parse("tel:$arg")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                true
+            }
+            "message" -> {
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = Uri.parse("smsto:$arg")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(intent)
