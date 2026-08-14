@@ -28,8 +28,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.anchor.launcher.ui.AnchorTheme
 import java.text.SimpleDateFormat
@@ -138,7 +137,7 @@ fun TodaySurface(viewModel: AnchorViewModel) {
     var date by remember { mutableStateOf("") }
     
     val baseFontWeight = if (viewModel.isBoldEnabled) FontWeight.Bold else FontWeight.Light
-    val baseLetterSpacing = viewModel.letterSpacingExtra.sp
+    val letterSpacingVal = viewModel.letterSpacingExtra
 
     LaunchedEffect(Unit) {
         while(true) {
@@ -163,25 +162,25 @@ fun TodaySurface(viewModel: AnchorViewModel) {
             ) {
                 Text(
                     text = time,
-                    fontSize = (76 * viewModel.fontSizeMultiplier).sp,
+                    fontSize = (76f * viewModel.fontSizeMultiplier).sp,
                     fontWeight = baseFontWeight,
-                    letterSpacing = (-2).sp + baseLetterSpacing,
+                    letterSpacing = (-2f + letterSpacingVal).sp,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = viewModel.currentSpace.name,
-                    fontSize = (13 * viewModel.fontSizeMultiplier).sp,
+                    fontSize = (13f * viewModel.fontSizeMultiplier).sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 3.sp + baseLetterSpacing,
+                    letterSpacing = (3f + letterSpacingVal).sp,
                     color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
             }
             Text(
                 text = date,
-                fontSize = (12 * viewModel.fontSizeMultiplier).sp,
+                fontSize = (12f * viewModel.fontSizeMultiplier).sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 2.sp + baseLetterSpacing,
+                letterSpacing = (2f + letterSpacingVal).sp,
                 color = MaterialTheme.colorScheme.secondary
             )
         }
@@ -199,14 +198,14 @@ fun TodaySurface(viewModel: AnchorViewModel) {
                 ) {
                     Text(
                         text = "TODAY",
-                        fontSize = (11 * viewModel.fontSizeMultiplier).sp,
+                        fontSize = (11f * viewModel.fontSizeMultiplier).sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp + baseLetterSpacing,
+                        letterSpacing = (2f + letterSpacingVal).sp,
                         color = MaterialTheme.colorScheme.secondary
                     )
                     Text(
                         text = "${tasks.count { it.isCompleted }}/${tasks.size}",
-                        fontSize = (11 * viewModel.fontSizeMultiplier).sp,
+                        fontSize = (11f * viewModel.fontSizeMultiplier).sp,
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
@@ -234,9 +233,9 @@ fun TodaySurface(viewModel: AnchorViewModel) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = task.text,
-                            fontSize = (16 * viewModel.fontSizeMultiplier).sp,
+                            fontSize = (16f * viewModel.fontSizeMultiplier).sp,
                             fontWeight = if (viewModel.isBoldEnabled) FontWeight.Bold else FontWeight.Normal,
-                            letterSpacing = baseLetterSpacing,
+                            letterSpacing = letterSpacingVal.sp,
                             color = if (task.isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
                         )
                     }
@@ -415,7 +414,7 @@ fun StaggeredAppRow(index: Int, app: AppInfo, viewModel: AnchorViewModel, contex
     ) {
         Text(
             text = app.label,
-            fontSize = (18 * viewModel.fontSizeMultiplier).sp,
+            fontSize = (18f * viewModel.fontSizeMultiplier).sp,
             fontWeight = if (viewModel.isBoldEnabled) FontWeight.Bold else FontWeight.Light,
             letterSpacing = viewModel.letterSpacingExtra.sp,
             modifier = Modifier
