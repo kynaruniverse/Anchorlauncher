@@ -10,11 +10,6 @@ import androidx.room.Room
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class DensityMode { QUIET, BALANCED, CONTROL }
-
-data class Space(val id: String, val name: String, val apps: List<String>)
-data class AppInfo(val label: String, val packageName: String)
-
 class AnchorViewModel(application: Application) : AndroidViewModel(application) {
     private val db = Room.databaseBuilder(application, AnchorDatabase::class.java, "anchor-db")
         .fallbackToDestructiveMigration()
@@ -26,13 +21,31 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     var focusModeActive by mutableStateOf(false)
     var focusTimeRemaining by mutableIntStateOf(0)
     
-    val spaces = listOf(
-        Space("personal", "PERSONAL", listOf("com.android.chrome", "com.google.android.apps.maps")),
-        Space("work", "WORK", listOf("com.google.android.gm", "com.google.android.calendar")),
-        Space("evening", "EVENING", listOf("com.google.android.apps.photos", "com.spotify.music"))
+    var pendingAppLaunch by mutableStateOf<AppInfo?>(null)
+
+    var spaces = mutableStateListOf(
+        Space("personal", "PERSONAL", listOf("com.android.chrome")),
+        Space("work", "WORK", listOf("com.google.android.gm")),
+        Space("evening", "EVENING", listOf("com.spotify.music"))
     )
 
-    val currentSpace get() = spaces[currentSpaceIndex]
+    val currentSpace get() = spaces.getOrElse(currentSpaceIndex) { spaces[0] }
+
+    init {
+        viewModelScope.launch {
+            val savedDensity = dao.getSetting("density_mode")
+            if (savedDensity != null) {
+                densityMode = DensityMode.valueOf(savedDensity)
+            }
+        }
+    }
+
+    fun setDensity(mode: DensityMode) {
+        densityMode = mode
+        viewModelScope.launch {
+            dao.saveSetting(SettingEntity("density_mode", mode.name))
+        }
+    }
 
     fun getTasks() = dao.getTasksForSpace(currentSpace.id)
 
@@ -53,6 +66,25 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
                 focusTimeRemaining--
             }
             focusModeActive = false
+        }
+    }
+
+    val protectedApps = listOf("youtube", "instagram", "tiktok", "reddit", "twitter", "facebook")
+
+    fun handleAppClick(app: AppInfo, context: Context) {
+        val isProtected = protectedApps.any { app.label.contains(it, ignoreCase = true) }
+        if (isProtected) {
+            pendingAppLaunch = app
+        } else {
+            launchApp(app.packageName, context)
+        }
+    }
+
+    fun launchApp(packageName: String, context: Context) {
+        pendingAppLaunch = null
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+        if (intent != null) {
+            context.startActivity(intent)
         }
     }
 

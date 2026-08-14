@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun BatteryWidget() {
@@ -21,31 +22,38 @@ fun BatteryWidget() {
     val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
     val batteryPct = (level / scale.toFloat() * 100).toInt()
 
-    Text("Battery: $batteryPct%", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+    Text(
+        text = "BATTERY · $batteryPct%",
+        fontSize = 10.sp,
+        letterSpacing = 1.sp,
+        color = MaterialTheme.colorScheme.secondary
+    )
 }
 
 @Composable
 fun FocusWidget(viewModel: AnchorViewModel) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (viewModel.focusModeActive) 
-                MaterialTheme.colorScheme.primaryContainer 
-            else MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            if (viewModel.focusModeActive) {
-                val mins = viewModel.focusTimeRemaining / 60
-                val secs = viewModel.focusTimeRemaining % 60
-                Text("Focus Active: ${mins}m ${secs}s")
-                TextButton(onClick = { viewModel.focusModeActive = false }) { Text("Stop") }
-            } else {
-                Text("Start Focus Session")
-                Row {
-                    listOf(10, 20, 60).forEach { mins ->
-                        OutlinedButton(onClick = { viewModel.startFocus(mins) }, modifier = Modifier.padding(end = 4.dp)) { Text("${mins}m") }
-                    }
+    if (viewModel.focusModeActive) {
+        val mins = viewModel.focusTimeRemaining / 60
+        val secs = viewModel.focusTimeRemaining % 60
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "FOCUS ACTIVE · ${mins}m ${secs}s",
+                fontSize = 10.sp,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            TextButton(onClick = { viewModel.focusModeActive = false }) {
+                Text("END SESSION", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            listOf(10, 25, 60).forEach { mins ->
+                TextButton(onClick = { viewModel.startFocus(mins) }) {
+                    Text("FOCUS ${mins}M", fontSize = 10.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 }
             }
         }

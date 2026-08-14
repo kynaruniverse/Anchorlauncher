@@ -5,19 +5,20 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val CalmDarkColorScheme = darkColorScheme(
-    primary = Color(0xFFE2E2E2),
-    secondary = Color(0xFF8E8E93),
-    background = Color(0xFF121212),
-    surface = Color(0xFF1E1E1E),
-    onBackground = Color(0xFFE2E2E2),
-    onSurface = Color(0xFFE2E2E2)
+val PremiumOledColorScheme = darkColorScheme(
+    primary = Color(0xFFFFFFFF),
+    secondary = Color(0xFF888888),
+    background = Color(0xFF000000),
+    surface = Color(0xFF0A0A0A),
+    onBackground = Color(0xFFFFFFFF),
+    onSurface = Color(0xFFFFFFFF),
+    error = Color(0xFFFF5555)
 )
 
 @Composable
 fun AnchorTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = CalmDarkColorScheme,
+        colorScheme = PremiumOledColorScheme,
         content = content
     )
 }

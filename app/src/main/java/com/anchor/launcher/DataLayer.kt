@@ -11,13 +11,6 @@ data class Task(
     val spaceId: String = "personal"
 )
 
-@Entity(tableName = "spaces")
-data class SpaceEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val density: String
-)
-
 @Entity(tableName = "settings")
 data class SettingEntity(
     @PrimaryKey val key: String,
@@ -38,12 +31,6 @@ interface AnchorDao {
     @Delete
     suspend fun deleteTask(task: Task)
 
-    @Query("SELECT * FROM spaces")
-    fun getAllSpaces(): Flow<List<SpaceEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSpace(space: SpaceEntity)
-
     @Query("SELECT value FROM settings WHERE key = :key")
     suspend fun getSetting(key: String): String?
 
@@ -51,7 +38,7 @@ interface AnchorDao {
     suspend fun saveSetting(setting: SettingEntity)
 }
 
-@Database(entities = [Task::class, SpaceEntity::class, SettingEntity::class], version = 2)
+@Database(entities = [Task::class, SettingEntity::class], version = 3)
 abstract class AnchorDatabase : RoomDatabase() {
     abstract fun anchorDao(): AnchorDao
 }

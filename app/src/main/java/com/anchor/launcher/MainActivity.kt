@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: AnchorViewModel) {
+    val context = LocalContext.current
     var isOnboarded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showDrawer by remember { mutableStateOf(false) }
@@ -68,7 +70,7 @@ fun MainScreen(viewModel: AnchorViewModel) {
                 onClick = { showSettings = true },
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings")
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.secondary)
             }
 
             AnimatedVisibility(
@@ -78,6 +80,15 @@ fun MainScreen(viewModel: AnchorViewModel) {
             ) {
                 AppDrawer(viewModel) { showDrawer = false }
             }
+
+            // Intent Gate Overlay
+            viewModel.pendingAppLaunch?.let { app ->
+                IntentGate(
+                    appName = app.label,
+                    onProceed = { viewModel.launchApp(app.packageName, context) },
+                    onCancel = { viewModel.pendingAppLaunch = null }
+                )
+            }
         }
     }
 }
@@ -86,34 +97,123 @@ fun MainScreen(viewModel: AnchorViewModel) {
 fun TodaySurface(viewModel: AnchorViewModel) {
     val tasks by viewModel.getTasks().collectAsState(initial = emptyList())
     var time by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
     
     LaunchedEffect(Unit) {
         while(true) {
-            time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            val now = Date()
+            time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
+            date = SimpleDateFormat("EEEE · d MMM", Locale.getDefault()).format(now).uppercase()
             kotlinx.coroutines.delay(1000)
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(32.dp)) {
-        Text(time, fontSize = 72.sp, fontWeight = FontWeight.Light)
-        Text(viewModel.currentSpace.name, letterSpacing = 4.sp, color = MaterialTheme.colorScheme.primary)
-        
-        Spacer(modifier = Modifier.height(48.dp))
-
-        if (viewModel.densityMode != DensityMode.QUIET) {
-            Text("TODAY", style = MaterialTheme.typography.labelLarge)
-            tasks.take(3).forEach { task ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = task.isCompleted, onCheckedChange = { viewModel.toggleTask(task) })
-                    Text(task.text, style = MaterialTheme.typography.bodyLarge)
-                }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp, vertical = 48.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // TOP: Time & Date
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Text(
+                    text = time,
+                    fontSize = 76.sp,
+                    fontWeight = FontWeight.ExtraLight,
+                    letterSpacing = (-2).sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = viewModel.currentSpace.name,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 3.sp,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
             }
+            Text(
+                text = date,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 2.sp,
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
 
+        // MIDDLE: Priorities
+        if (viewModel.densityMode != DensityMode.QUIET) {
+            Column(modifier = Modifier.weight(1f).padding(top = 40.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "TODAY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Text(
+                        text = "${tasks.count { it.isCompleted }}/${tasks.size}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (tasks.isEmpty()) {
+                    Text(
+                        text = "· Add a priority for today",
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                    )
+                }
+
+                tasks.forEach { task ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = task.isCompleted,
+                            onCheckedChange = { viewModel.toggleTask(task) },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.secondary
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = task.text,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = if (task.isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
+        // BOTTOM: Control Widgets
         if (viewModel.densityMode == DensityMode.CONTROL) {
-            Spacer(modifier = Modifier.height(24.dp))
-            FocusWidget(viewModel)
-            BatteryWidget()
+            Column {
+                FocusWidget(viewModel)
+                Spacer(modifier = Modifier.height(12.dp))
+                BatteryWidget()
+            }
         }
     }
 }
@@ -124,26 +224,60 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
     val apps = remember { viewModel.getInstalledApps(context) }
     var query by remember { mutableStateOf("") }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Search apps or commands...") },
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 48.dp)
+        ) {
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    TextButton(onClick = {
-                        if (viewModel.executeCommand(query, context)) onClose()
-                    }) { Text("Run") }
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search apps or commands...", color = MaterialTheme.colorScheme.secondary) },
+                    modifier = Modifier.weight(1f),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedIndicatorColor = MaterialTheme.colorScheme.secondary
+                    ),
+                    singleLine = true
+                )
+                TextButton(onClick = {
+                    if (viewModel.executeCommand(query, context)) onClose()
+                }) {
+                    Text("RUN", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
-            )
-            LazyColumn {
-                items(apps.filter { it.label.contains(query, true) }) { app ->
-                    TextButton(onClick = { 
-                        context.startActivity(context.packageManager.getLaunchIntentForPackage(app.packageName))
-                        onClose()
-                    }) {
-                        Text(app.label, modifier = Modifier.fillMaxWidth(), fontSize = 18.sp)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            val filteredApps = apps.filter { it.label.contains(query, true) }
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(filteredApps) { app ->
+                    TextButton(
+                        onClick = { 
+                            viewModel.handleAppClick(app, context)
+                            onClose()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = app.label,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Light,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
