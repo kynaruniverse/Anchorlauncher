@@ -26,8 +26,8 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     var pendingAppLaunch by mutableStateOf<AppInfo?>(null)
     var selectedAppForMenu by mutableStateOf<AppInfo?>(null)
 
-    var hiddenApps = mutableStateSetOf<String>()
-    var favoriteApps = mutableStateSetOf<String>()
+    var hiddenApps = mutableStateListOf<String>()
+    var favoriteApps = mutableStateListOf<String>()
     var recentAppPackages = mutableStateListOf<String>()
 
     var fontSizeMultiplier by mutableFloatStateOf(1.0f)
@@ -40,10 +40,10 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     // Dynamic Spaces
     var spaces = mutableStateListOf<Space>()
 
-    // Phase 16: Friction Levels & Reflection
+    // Friction Levels & Reflection
     var appFrictionLevels = mutableStateMapOf<String, String>()
     var oneThingReflection by mutableStateOf("")
-    var screenTimeMinutes by mutableIntStateOf(88) // Simulated for MVP
+    var screenTimeMinutes by mutableIntStateOf(88)
 
     val currentSpace get() = spaces.getOrElse(currentSpaceIndex) { 
         if (spaces.isNotEmpty()) spaces[0] else Space("default", "HOME", emptyList())
@@ -51,7 +51,7 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         viewModelScope.launch {
-            dao.getSetting("density_mode")?.let { densityMode = DensityMode.valueOf(it) }
+            dao.getSetting("density_mode")?.let { try { densityMode = DensityMode.valueOf(it) } catch(e: Exception) {} }
             dao.getSetting("font_size")?.let { fontSizeMultiplier = it.toFloatOrNull() ?: 1.0f }
             dao.getSetting("letter_spacing")?.let { letterSpacingExtra = it.toFloatOrNull() ?: 0.0f }
             dao.getSetting("bold_enabled")?.let { isBoldEnabled = it.toBoolean() }
@@ -62,7 +62,6 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
             hiddenApps.addAll(dao.getHiddenApps())
             favoriteApps.addAll(dao.getFavorites())
 
-            // Load Friction Levels
             dao.getAllFrictionLevels().forEach { 
                 appFrictionLevels[it.packageName] = it.level
             }
@@ -192,17 +191,10 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
         
         when (friction) {
             "OFF" -> launchApp(app.packageName, context)
-            "LIGHT" -> {
-                pendingAppLaunch = app
-            }
-            "INTENT" -> {
-                pendingAppLaunch = app
-            }
-            "TIMER" -> {
+            "LIGHT", "INTENT", "TIMER" -> {
                 pendingAppLaunch = app
             }
             "BLOCK" -> {
-                // In Focus Mode or Blocked periods
                 if (focusModeActive) {
                     pendingAppLaunch = app
                 } else {

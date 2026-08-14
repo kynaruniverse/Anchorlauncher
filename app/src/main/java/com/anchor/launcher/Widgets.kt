@@ -114,7 +114,6 @@ fun ScreenTimeWidget(viewModel: AnchorViewModel) {
 
 @Composable
 fun WeatherWidget() {
-    // Simulated Weather for MVP
     Text(
         text = "WEATHER · 22° · LONDON",
         fontSize = 10.sp,
