@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,35 +36,35 @@ fun OnboardingScreen(viewModel: AnchorViewModel, onComplete: () -> Unit) {
         ) {
             when (step) {
                 1 -> {
-                    Text("ANCHOR", fontSize = 32.sp, letterSpacing = 12.sp, fontWeight = FontWeight.ExtraLight)
+                    Text(stringResource(R.string.app_name), fontSize = 32.sp, letterSpacing = 12.sp, fontWeight = FontWeight.ExtraLight)
                     Spacer(modifier = Modifier.height(24.dp))
-                    Text("Your phone. On purpose.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
+                    Text(stringResource(R.string.onboarding_tagline), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     Spacer(modifier = Modifier.height(64.dp))
-                    Button(onClick = { step = 2 }) { Text("BEGIN") }
+                    Button(onClick = { step = 2 }) { Text(stringResource(R.string.begin)) }
                 }
                 2 -> {
-                    Text("CHOOSE DENSITY", fontSize = 12.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.choose_density_title), fontSize = 12.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(32.dp))
                     // Previously these buttons only advanced the onboarding step and never
                     // called viewModel.setDensity(), so the very first choice a new user
                     // makes was silently discarded and the app always defaulted to BALANCED.
-                    DensityOption("QUIET", "Just the time.") {
+                    DensityOption(stringResource(R.string.density_quiet_title), stringResource(R.string.density_quiet_desc)) {
                         viewModel.setDensity(DensityMode.QUIET)
                         step = 3
                     }
-                    DensityOption("BALANCED", "Priorities & Quick Apps.") {
+                    DensityOption(stringResource(R.string.density_balanced_title), stringResource(R.string.density_balanced_desc)) {
                         viewModel.setDensity(DensityMode.BALANCED)
                         step = 3
                     }
-                    DensityOption("CONTROL", "Full command surface.") {
+                    DensityOption(stringResource(R.string.density_control_title), stringResource(R.string.density_control_desc)) {
                         viewModel.setDensity(DensityMode.CONTROL)
                         step = 3
                     }
                 }
                 3 -> {
-                    Text("READY", fontSize = 24.sp, letterSpacing = 4.sp)
+                    Text(stringResource(R.string.onboarding_ready_title), fontSize = 24.sp, letterSpacing = 4.sp)
                     Spacer(modifier = Modifier.height(24.dp))
-                    Text("Swipe up for apps.\nSwipe sideways for Spaces.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
+                    Text(stringResource(R.string.onboarding_ready_body), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     Spacer(modifier = Modifier.height(48.dp))
                     // The manifest declares the HOME/LAUNCHER intent filters needed for
                     // Anchor to be selectable as a default launcher, but nothing ever
@@ -72,7 +73,7 @@ fun OnboardingScreen(viewModel: AnchorViewModel, onComplete: () -> Unit) {
                     Button(onClick = {
                         requestDefaultLauncher(context, roleRequestLauncher)
                         onComplete()
-                    }) { Text("ENTER ANCHOR") }
+                    }) { Text(stringResource(R.string.enter_anchor)) }
                 }
             }
         }

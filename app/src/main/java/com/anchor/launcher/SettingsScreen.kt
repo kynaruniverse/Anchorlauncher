@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,9 +38,9 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SETTINGS", fontSize = 14.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.settings_title), fontSize = 14.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("BACK", color = MaterialTheme.colorScheme.secondary) }
+                    TextButton(onClick = onBack) { Text(stringResource(R.string.back), color = MaterialTheme.colorScheme.secondary) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
@@ -54,12 +55,12 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
         ) {
             // REFLECTION
             item {
-                Text("DAILY INTENTION", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.daily_intention_title), fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = viewModel.oneThingReflection,
                     onValueChange = { viewModel.setOneThing(it) },
-                    placeholder = { Text("What matters today?") },
+                    placeholder = { Text(stringResource(R.string.one_thing_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -68,32 +69,32 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
 
             // SPACES MANAGEMENT
             item {
-                Text("SPACES", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.spaces_title), fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(16.dp))
                 viewModel.spaces.forEach { space ->
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(space.name, fontWeight = if (viewModel.currentSpace.id == space.id) FontWeight.Bold else FontWeight.Normal)
                         IconButton(onClick = { viewModel.deleteSpace(space.id) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_content_description), tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
                 TextButton(onClick = { showAddSpaceDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("ADD NEW SPACE")
+                    Text(stringResource(R.string.add_new_space))
                 }
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
             // FRICTION RULES
             item {
-                Text("INTENTIONAL FRICTION", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.intentional_friction_title), fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search apps for friction rules...") },
+                    placeholder = { Text(stringResource(R.string.search_friction_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -106,7 +107,7 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(app.label, modifier = Modifier.weight(1f))
                         TextButton(onClick = { showFrictionDialog = app }) {
-                            Text(friction, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(frictionLevelLabelRes(friction)), color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -116,11 +117,11 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(32.dp))
 
                 // DENSITY
-                Text("DENSITY", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.density_title), fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(16.dp))
                 DensityMode.values().forEach { mode ->
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(mode.name, color = if(viewModel.densityMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
+                        Text(stringResource(densityModeLabelRes(mode)), color = if(viewModel.densityMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
                         RadioButton(selected = viewModel.densityMode == mode, onClick = { viewModel.setDensity(mode) })
                     }
                 }
@@ -128,10 +129,10 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(32.dp))
 
                 // TYPOGRAPHY
-                Text("TYPOGRAPHY", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.typography_title), fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Font Size: ${(tempFontSize * 100).toInt()}%", fontSize = 14.sp)
+                Text(stringResource(R.string.font_size_label, (tempFontSize * 100).toInt()), fontSize = 14.sp)
                 Slider(
                     value = tempFontSize,
                     onValueChange = { tempFontSize = it },
@@ -143,7 +144,7 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
                 )
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Bold Text", fontSize = 14.sp)
+                    Text(stringResource(R.string.bold_text), fontSize = 14.sp)
                     Switch(
                         checked = viewModel.isBoldEnabled,
                         onCheckedChange = {
@@ -154,10 +155,10 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
                 }
 
                 Spacer(modifier = Modifier.height(48.dp))
-                Text("ABOUT", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.about_title), fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("ANCHOR LAUNCHER", fontWeight = FontWeight.Bold)
-                Text("Version 1.0.0 · Final MVP", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.app_full_name), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.app_version), fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(48.dp))
             }
         }
@@ -165,12 +166,12 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
         if (showAddSpaceDialog) {
             AlertDialog(
                 onDismissRequest = { showAddSpaceDialog = false },
-                title = { Text("New Space") },
+                title = { Text(stringResource(R.string.new_space_dialog_title)) },
                 text = {
                     OutlinedTextField(
                         value = newSpaceName,
                         onValueChange = { newSpaceName = it },
-                        label = { Text("Space Name") },
+                        label = { Text(stringResource(R.string.space_name_label)) },
                         singleLine = true
                     )
                 },
@@ -181,10 +182,10 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
                             newSpaceName = ""
                             showAddSpaceDialog = false
                         }
-                    }) { Text("CREATE") }
+                    }) { Text(stringResource(R.string.create)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showAddSpaceDialog = false }) { Text("CANCEL") }
+                    TextButton(onClick = { showAddSpaceDialog = false }) { Text(stringResource(R.string.cancel)) }
                 }
             )
         }
@@ -192,18 +193,18 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
         showFrictionDialog?.let { app ->
             AlertDialog(
                 onDismissRequest = { showFrictionDialog = null },
-                title = { Text("Friction: ${app.label}") },
+                title = { Text(stringResource(R.string.friction_dialog_title, app.label)) },
                 text = {
                     Column {
                         listOf("OFF", "LIGHT", "INTENT", "TIMER", "BLOCK").forEach { level ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                 RadioButton(selected = (viewModel.appFrictionLevels[app.packageName] ?: "OFF") == level, onClick = { viewModel.setFrictionLevel(app.packageName, level) })
-                                Text(level)
+                                Text(stringResource(frictionLevelLabelRes(level)))
                             }
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { showFrictionDialog = null }) { Text("DONE") } }
+                confirmButton = { TextButton(onClick = { showFrictionDialog = null }) { Text(stringResource(R.string.done)) } }
             )
         }
     }

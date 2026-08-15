@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,13 +67,16 @@ fun BatteryWidget() {
         }
     }
 
-    WidgetLabel("BATTERY · $batteryPct%")
+    WidgetLabel(stringResource(R.string.battery_label, batteryPct))
 }
 
 @Composable
 fun CalendarWidget() {
     val context = LocalContext.current
-    var nextEvent by remember { mutableStateOf("No upcoming events") }
+    val noEventsLabel = stringResource(R.string.calendar_no_events)
+    val unavailableLabel = stringResource(R.string.calendar_unavailable)
+    val eventFormat = stringResource(R.string.calendar_event_format)
+    var nextEvent by remember { mutableStateOf(noEventsLabel) }
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
@@ -102,30 +106,30 @@ fun CalendarWidget() {
                             val title = it.getString(0)
                             val startTime = it.getLong(1)
                             val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(startTime))
-                            nextEvent = "$timeStr · $title"
+                            nextEvent = String.format(eventFormat, timeStr, title)
                         }
                     }
                 } catch (e: Exception) {
-                    nextEvent = "Calendar unavailable"
+                    nextEvent = unavailableLabel
                 }
             }
         }
     }
 
     if (hasPermission) {
-        WidgetLabel("NEXT · $nextEvent")
+        WidgetLabel(stringResource(R.string.calendar_next_label, nextEvent))
     } else {
         TextButton(onClick = { permissionLauncher.launch(Manifest.permission.READ_CALENDAR) }) {
-            WidgetLabel("ENABLE CALENDAR WIDGET")
+            WidgetLabel(stringResource(R.string.calendar_enable_widget))
         }
     }
 }
 
 /**
- * Reruns [block] every time the host Activity resumes (not just on first composition).
- * Needed for widgets that depend on a permission the user grants in a separate Settings
- * screen (usage access, location settings) -- without this, coming back from Settings
- * would leave the widget stuck on its "enable" prompt until process recreation.
+ * Reruns whenever the host Activity resumes (not just on first composition). Needed for
+ * widgets that depend on a permission the user grants in a separate Settings screen (usage
+ * access, location settings) -- without this, coming back from Settings would leave the
+ * widget stuck on its "enable" prompt until process recreation.
  */
 @Composable
 private fun rememberResumeCounter(): Int {
@@ -180,12 +184,12 @@ fun ScreenTimeWidget(viewModel: AnchorViewModel) {
     if (hasPermission) {
         val hours = viewModel.screenTimeMinutes / 60
         val minutes = viewModel.screenTimeMinutes % 60
-        WidgetLabel("SCREEN TIME · ${hours}h ${minutes}m")
+        WidgetLabel(stringResource(R.string.screen_time_label, hours, minutes))
     } else {
         TextButton(onClick = {
             context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }) {
-            WidgetLabel("ENABLE SCREEN TIME WIDGET")
+            WidgetLabel(stringResource(R.string.screen_time_enable_widget))
         }
     }
 }
@@ -199,12 +203,16 @@ fun ScreenTimeWidget(viewModel: AnchorViewModel) {
 @Composable
 fun WeatherWidget() {
     val context = LocalContext.current
+    val placeholderLabel = stringResource(R.string.weather_placeholder)
+    val locationUnavailableLabel = stringResource(R.string.weather_location_unavailable)
+    val weatherLabelFormat = stringResource(R.string.weather_label)
+    val unavailableLabel = stringResource(R.string.weather_unavailable)
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         )
     }
-    var weatherText by remember { mutableStateOf("WEATHER · —") }
+    var weatherText by remember { mutableStateOf(placeholderLabel) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -223,16 +231,16 @@ fun WeatherWidget() {
                     }
                     val location = provider?.let { locationManager.getLastKnownLocation(it) }
                     if (location == null) {
-                        "WEATHER · LOCATION UNAVAILABLE"
+                        locationUnavailableLabel
                     } else {
                         val url = "https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}" +
                             "&longitude=${location.longitude}&current=temperature_2m"
                         val response = java.net.URL(url).readText()
                         val temp = JSONObject(response).getJSONObject("current").getDouble("temperature_2m")
-                        "WEATHER · ${temp.toInt()}°"
+                        String.format(weatherLabelFormat, temp.toInt())
                     }
                 } catch (e: Exception) {
-                    "WEATHER · UNAVAILABLE"
+                    unavailableLabel
                 }
             }
         }
@@ -242,7 +250,7 @@ fun WeatherWidget() {
         WidgetLabel(weatherText)
     } else {
         TextButton(onClick = { permissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
-            WidgetLabel("ENABLE WEATHER WIDGET")
+            WidgetLabel(stringResource(R.string.weather_enable_widget))
         }
     }
 }
@@ -251,7 +259,7 @@ fun WeatherWidget() {
 fun ReflectionWidget(viewModel: AnchorViewModel) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(
-            text = "ONE THING",
+            text = stringResource(R.string.one_thing_title),
             fontSize = 10.sp,
             letterSpacing = 2.sp,
             color = MaterialTheme.colorScheme.secondary,
@@ -259,7 +267,7 @@ fun ReflectionWidget(viewModel: AnchorViewModel) {
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = if (viewModel.oneThingReflection.isBlank()) "What matters today?" else viewModel.oneThingReflection,
+            text = if (viewModel.oneThingReflection.isBlank()) stringResource(R.string.one_thing_placeholder) else viewModel.oneThingReflection,
             fontSize = 16.sp,
             color = if (viewModel.oneThingReflection.isBlank()) MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Light
@@ -317,10 +325,10 @@ fun BreathingWidget() {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("BREATHING", fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                Text(stringResource(R.string.breathing_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = if (isRunning) "Focus on your breath..." else "1-Minute Mindfulness",
+                    text = if (isRunning) stringResource(R.string.breathing_active) else stringResource(R.string.breathing_idle),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -333,7 +341,7 @@ fun BreathingWidget() {
                     isRunning = true
                     view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                 }) {
-                    Text("START", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, letterSpacing = 1.sp)
+                    Text(stringResource(R.string.start), color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, letterSpacing = 1.sp)
                 }
             }
         }
@@ -348,7 +356,7 @@ fun FocusWidget(viewModel: AnchorViewModel) {
         val secs = viewModel.focusTimeRemaining % 60
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "FOCUS ACTIVE · ${mins}m ${secs}s",
+                text = stringResource(R.string.focus_active_label, mins, secs),
                 fontSize = 10.sp,
                 letterSpacing = 1.sp,
                 color = MaterialTheme.colorScheme.primary
@@ -357,7 +365,7 @@ fun FocusWidget(viewModel: AnchorViewModel) {
                 viewModel.focusModeActive = false
                 view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             }) {
-                Text("END SESSION", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.end_session), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
             }
         }
     } else {
@@ -370,7 +378,7 @@ fun FocusWidget(viewModel: AnchorViewModel) {
                     viewModel.startFocus(mins)
                     view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                 }) {
-                    Text("FOCUS ${mins}M", fontSize = 10.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                    Text(stringResource(R.string.focus_duration_label, mins), fontSize = 10.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
                 }
             }
         }

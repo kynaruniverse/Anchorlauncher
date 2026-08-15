@@ -1,4 +1,106 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ANCHOR</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_tagline">Your phone. On purpose.</string>
+    <string name="begin">BEGIN</string>
+    <string name="choose_density_title">CHOOSE DENSITY</string>
+    <string name="onboarding_ready_title">READY</string>
+    <string name="onboarding_ready_body">Swipe up for apps.\nSwipe sideways for Spaces.</string>
+    <string name="enter_anchor">ENTER ANCHOR</string>
+
+    <!-- Density modes (shared label set: used in onboarding, settings, and as a display
+         mapping for the DensityMode enum -- see Labels.kt. The enum's own .name is still
+         used internally for persistence/logic and must stay in English/unlocalized.) -->
+    <string name="density_quiet_title">QUIET</string>
+    <string name="density_quiet_desc">Just the time.</string>
+    <string name="density_balanced_title">BALANCED</string>
+    <string name="density_balanced_desc">Priorities &amp; Quick Apps.</string>
+    <string name="density_control_title">CONTROL</string>
+    <string name="density_control_desc">Full command surface.</string>
+
+    <!-- Friction levels (display labels only -- the underlying "OFF"/"LIGHT"/"INTENT"/
+         "TIMER"/"BLOCK" keys stored in the DB and used in AnchorViewModel's `when` logic
+         are NOT localized; only what's shown to the user is. See Labels.kt.) -->
+    <string name="friction_off">OFF</string>
+    <string name="friction_light">LIGHT</string>
+    <string name="friction_intent">INTENT</string>
+    <string name="friction_timer">TIMER</string>
+    <string name="friction_block">BLOCK</string>
+
+    <!-- Intent Gate -->
+    <string name="intent_gate_why">Why are you opening this?</string>
+    <string name="intent_gate_reason_specific">Something specific</string>
+    <string name="intent_gate_reason_search">Search for info</string>
+    <string name="intent_gate_reason_browsing">Just browsing</string>
+    <string name="intent_gate_how_long">How long do you need?</string>
+    <string name="intent_gate_one_more_thing">One more thing —</string>
+    <string name="duration_10">10 Minutes</string>
+    <string name="duration_20">20 Minutes</string>
+    <string name="duration_30">30 Minutes</string>
+    <string name="duration_no_limit">No Limit</string>
+    <string name="cancel">CANCEL</string>
+
+    <!-- Widgets -->
+    <string name="battery_label">BATTERY · %1$d%%</string>
+    <string name="calendar_next_label">NEXT · %1$s</string>
+    <string name="calendar_no_events">No upcoming events</string>
+    <string name="calendar_unavailable">Calendar unavailable</string>
+    <string name="calendar_event_format">%1$s · %2$s</string>
+    <string name="calendar_enable_widget">ENABLE CALENDAR WIDGET</string>
+    <string name="screen_time_label">SCREEN TIME · %1$dh %2$dm</string>
+    <string name="screen_time_enable_widget">ENABLE SCREEN TIME WIDGET</string>
+    <string name="weather_placeholder">WEATHER · —</string>
+    <string name="weather_location_unavailable">WEATHER · LOCATION UNAVAILABLE</string>
+    <string name="weather_label">WEATHER · %1$d°</string>
+    <string name="weather_unavailable">WEATHER · UNAVAILABLE</string>
+    <string name="weather_enable_widget">ENABLE WEATHER WIDGET</string>
+    <string name="one_thing_title">ONE THING</string>
+    <string name="one_thing_placeholder">What matters today?</string>
+    <string name="breathing_title">BREATHING</string>
+    <string name="breathing_active">Focus on your breath…</string>
+    <string name="breathing_idle">1-Minute Mindfulness</string>
+    <string name="start">START</string>
+    <string name="focus_active_label">FOCUS ACTIVE · %1$dm %2$ds</string>
+    <string name="end_session">END SESSION</string>
+    <string name="focus_duration_label">FOCUS %1$dM</string>
+
+    <!-- Main screen / drawer -->
+    <string name="settings_content_description">Settings</string>
+    <string name="add_priority_placeholder">Add priority…</string>
+    <string name="add">ADD</string>
+    <string name="today_title">TODAY</string>
+    <string name="search_apps_placeholder">Search apps or commands…</string>
+    <string name="run">RUN</string>
+    <string name="favorites_title">FAVORITES</string>
+    <string name="recent_title">RECENT</string>
+    <string name="all_apps_title">ALL APPS</string>
+    <string name="remove_from_favorites">Remove from Favorites</string>
+    <string name="add_to_favorites">Add to Favorites</string>
+    <string name="hide_app">Hide App</string>
+    <string name="uninstall">Uninstall</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">SETTINGS</string>
+    <string name="back">BACK</string>
+    <string name="daily_intention_title">DAILY INTENTION</string>
+    <string name="spaces_title">SPACES</string>
+    <string name="delete_content_description">Delete</string>
+    <string name="add_new_space">ADD NEW SPACE</string>
+    <string name="intentional_friction_title">INTENTIONAL FRICTION</string>
+    <string name="search_friction_placeholder">Search apps for friction rules…</string>
+    <string name="density_title">DENSITY</string>
+    <string name="typography_title">TYPOGRAPHY</string>
+    <string name="font_size_label">Font Size: %1$d%%</string>
+    <string name="bold_text">Bold Text</string>
+    <string name="about_title">ABOUT</string>
+    <string name="app_full_name">ANCHOR LAUNCHER</string>
+    <string name="app_version">Version 1.0.0 · Final MVP</string>
+    <string name="new_space_dialog_title">New Space</string>
+    <string name="space_name_label">Space Name</string>
+    <string name="create">CREATE</string>
+    <string name="friction_dialog_title">Friction: %1$s</string>
+    <string name="done">DONE</string>
 </resources>

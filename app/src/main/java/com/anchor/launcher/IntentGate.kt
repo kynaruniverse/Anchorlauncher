@@ -5,19 +5,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Parses a duration label like "10 Minutes" -> 10, "No Limit" -> null.
- * Exposed so MainActivity/ViewModel can turn the user's choice into a real
- * timed-unlock window for TIMER-friction apps (previously this value was
- * captured and then silently discarded).
+ * Parses a duration label like "10 Minutes" -> 10. Any label with no leading digits
+ * (e.g. "No Limit", or its translation in another locale) returns null. Deliberately does
+ * NOT compare against the literal English string "No Limit" so this keeps working once the
+ * duration labels are localized -- only the digit prefix carries meaning.
  */
 fun parseDurationMinutes(duration: String): Int? {
-    if (duration.equals("No Limit", ignoreCase = true)) return null
     return duration.takeWhile { it.isDigit() }.toIntOrNull()
 }
 
@@ -54,43 +54,53 @@ fun IntentGate(
             if (step == 1) {
                 // Step 1: Why?
                 Text(
-                    text = "Why are you opening this?",
+                    text = stringResource(R.string.intent_gate_why),
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.secondary,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
-                val reasons = listOf("Something specific", "Search for info", "Just browsing")
-                reasons.forEach { reason ->
+                val reasons = listOf(
+                    R.string.intent_gate_reason_specific,
+                    R.string.intent_gate_reason_search,
+                    R.string.intent_gate_reason_browsing
+                )
+                reasons.forEach { reasonRes ->
                     OutlinedButton(
                         onClick = {
                             if (frictionLevel == "INTENT") onProceed(null) else step = 2
                         },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                     ) {
-                        Text(reason.uppercase(), letterSpacing = 1.sp)
+                        Text(stringResource(reasonRes).uppercase(), letterSpacing = 1.sp)
                     }
                 }
             } else if (step == 2) {
                 // Step 2: How long?
                 Text(
-                    text = if (frictionLevel == "TIMER") "How long do you need?" else "One more thing —",
+                    text = if (frictionLevel == "TIMER") stringResource(R.string.intent_gate_how_long) else stringResource(R.string.intent_gate_one_more_thing),
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.secondary,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
-                val durations = listOf("10 Minutes", "20 Minutes", "30 Minutes", "No Limit")
-                durations.forEach { duration ->
+                val durations = listOf(
+                    R.string.duration_10,
+                    R.string.duration_20,
+                    R.string.duration_30,
+                    R.string.duration_no_limit
+                )
+                durations.forEach { durationRes ->
+                    val durationText = stringResource(durationRes)
                     OutlinedButton(
                         onClick = {
-                            onProceed(parseDurationMinutes(duration))
+                            onProceed(parseDurationMinutes(durationText))
                         },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                     ) {
-                        Text(duration.uppercase(), letterSpacing = 1.sp)
+                        Text(durationText.uppercase(), letterSpacing = 1.sp)
                     }
                 }
             }
@@ -98,7 +108,7 @@ fun IntentGate(
             Spacer(modifier = Modifier.height(32.dp))
 
             TextButton(onClick = onCancel) {
-                Text("CANCEL", color = MaterialTheme.colorScheme.secondary, letterSpacing = 2.sp)
+                Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.secondary, letterSpacing = 2.sp)
             }
         }
     }

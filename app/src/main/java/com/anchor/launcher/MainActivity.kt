@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -139,7 +140,7 @@ fun MainScreen(viewModel: AnchorViewModel) {
                 onClick = { showSettings = true },
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.secondary)
+                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_content_description), tint = MaterialTheme.colorScheme.secondary)
             }
 
             AnimatedVisibility(
@@ -251,7 +252,7 @@ fun TodaySurface(viewModel: AnchorViewModel, space: Space) {
                 TextField(
                     value = newTaskText,
                     onValueChange = { newTaskText = it },
-                    placeholder = { Text("Add priority...", color = MaterialTheme.colorScheme.secondary) },
+                    placeholder = { Text(stringResource(R.string.add_priority_placeholder), color = MaterialTheme.colorScheme.secondary) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -267,7 +268,7 @@ fun TodaySurface(viewModel: AnchorViewModel, space: Space) {
                                 newTaskText = ""
                             }
                         }) {
-                            Text("ADD", color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 )
@@ -280,7 +281,7 @@ fun TodaySurface(viewModel: AnchorViewModel, space: Space) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "TODAY",
+                        text = stringResource(R.string.today_title),
                         fontSize = (11f * viewModel.fontSizeMultiplier).sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (2f + letterSpacingVal).sp,
@@ -381,7 +382,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                     TextField(
                         value = query,
                         onValueChange = { query = it },
-                        placeholder = { Text("Search apps or commands...", color = MaterialTheme.colorScheme.secondary) },
+                        placeholder = { Text(stringResource(R.string.search_apps_placeholder), color = MaterialTheme.colorScheme.secondary) },
                         modifier = Modifier.weight(1f),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
@@ -394,7 +395,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                     TextButton(onClick = {
                         if (viewModel.executeCommand(query, context)) onClose()
                     }) {
-                        Text("RUN", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.run), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -403,7 +404,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     if (query.isEmpty() && favoriteAppsList.isNotEmpty()) {
                         item {
-                            Text("FAVORITES", fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                            Text(stringResource(R.string.favorites_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         itemsIndexed(favoriteAppsList, key = { _, app -> "fav_${app.packageName}" }) { index, app ->
@@ -414,7 +415,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
 
                     if (query.isEmpty() && recentAppsList.isNotEmpty()) {
                         item {
-                            Text("RECENT", fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                            Text(stringResource(R.string.recent_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         itemsIndexed(recentAppsList, key = { _, app -> "recent_${app.packageName}" }) { index, app ->
@@ -425,7 +426,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
 
                     if (query.isEmpty()) {
                         item {
-                            Text("ALL APPS", fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                            Text(stringResource(R.string.all_apps_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
@@ -443,19 +444,19 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                     text = {
                         Column {
                             TextButton(onClick = { viewModel.toggleFavorite(app.packageName) }) {
-                                Text(if (viewModel.favoriteApps.contains(app.packageName)) "Remove from Favorites" else "Add to Favorites")
+                                Text(if (viewModel.favoriteApps.contains(app.packageName)) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites))
                             }
                             TextButton(onClick = { viewModel.toggleHideApp(app.packageName) }) {
-                                Text("Hide App")
+                                Text(stringResource(R.string.hide_app))
                             }
                             TextButton(onClick = { viewModel.uninstallApp(app.packageName, context) }) {
-                                Text("Uninstall", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.uninstall), color = MaterialTheme.colorScheme.error)
                             }
                         }
                     },
                     confirmButton = {
                         TextButton(onClick = { viewModel.selectedAppForMenu = null }) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.dialog_cancel))
                         }
                     },
                     containerColor = MaterialTheme.colorScheme.surface
