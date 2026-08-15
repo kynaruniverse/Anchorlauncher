@@ -357,7 +357,12 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
     // Tracks which packages have already played their staggered entrance animation so that
     // recomposition (e.g. every keystroke in search, which previously caused the whole
     // visible list to visibly re-stagger/flicker) doesn't retrigger it.
-    val animatedKeys = remember { mutableStateSetOf<String>() }
+    // Plain (non-Compose-state) MutableSet -- mutableStateSetOf() doesn't exist in the
+    // Compose runtime API (only mutableStateListOf/mutableStateMapOf do). This doesn't need
+    // to be observable anyway: it's a one-way gate mutated from the animation's
+    // finishedListener callback, and is only ever read during a recomposition that's
+    // already happening for some other reason (search query changing, etc).
+    val animatedKeys = remember { mutableSetOf<String>() }
 
     val visibleApps = allApps.filter { !viewModel.hiddenApps.contains(it.packageName) }
     val filteredApps = visibleApps.filter { it.label.contains(query, true) }
