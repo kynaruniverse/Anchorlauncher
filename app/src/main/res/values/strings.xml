@@ -11,7 +11,7 @@
     <string name="enter_anchor">ENTER ANCHOR</string>
 
     <!-- Density modes (shared label set: used in onboarding, settings, and as a display
-         mapping for the DensityMode enum -- see Labels.kt. The enum's own .name is still
+         mapping for the DensityMode enum; see Labels.kt. The enum's own .name is still
          used internally for persistence/logic and must stay in English/unlocalized.) -->
     <string name="density_quiet_title">QUIET</string>
     <string name="density_quiet_desc">Just the time.</string>
@@ -20,7 +20,7 @@
     <string name="density_control_title">CONTROL</string>
     <string name="density_control_desc">Full command surface.</string>
 
-    <!-- Friction levels (display labels only -- the underlying "OFF"/"LIGHT"/"INTENT"/
+    <!-- Friction levels (display labels only; the underlying "OFF"/"LIGHT"/"INTENT"/
          "TIMER"/"BLOCK" keys stored in the DB and used in AnchorViewModel's `when` logic
          are NOT localized; only what's shown to the user is. See Labels.kt.) -->
     <string name="friction_off">OFF</string>
