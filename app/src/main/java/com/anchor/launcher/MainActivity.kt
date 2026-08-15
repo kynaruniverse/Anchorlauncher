@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -16,13 +17,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -57,16 +61,36 @@ fun MainScreen(viewModel: AnchorViewModel) {
     var showDrawer by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(pageCount = { viewModel.spaces.size })
 
+    // Sync Pager with ViewModel
+    LaunchedEffect(pagerState.currentPage) {
+        viewModel.currentSpaceIndex = pagerState.currentPage
+    }
+
+    // Sync ViewModel with Pager
+    LaunchedEffect(viewModel.currentSpaceIndex) {
+        if (pagerState.currentPage != viewModel.currentSpaceIndex) {
+            pagerState.animateScrollToPage(viewModel.currentSpaceIndex)
+        }
+    }
+
     fun handleGestureAction(action: String) {
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         when (action) {
             "NOTIFICATIONS" -> {
+                // There is no public, stable API for a launcher to expand the notification
+                // shade. This reflective call is the de-facto approach other launchers use,
+                // but it requires EXPAND_STATUS_BAR (auto-granted to default launchers on
+                // most, not all, OEM skins) and can be blocked entirely on some ROMs. When it
+                // fails we at least distinguish "nothing happened" from "gesture worked" with
+                // haptic feedback so the user isn't left wondering if the swipe registered.
                 try {
                     val statusBarService = context.getSystemService("statusbar")
                     val statusBarManager = Class.forName("android.app.StatusBarManager")
                     val expandMethod = statusBarManager.getMethod("expandNotificationsPanel")
                     expandMethod.invoke(statusBarService)
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                    view.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                }
             }
             "DRAWER" -> showDrawer = true
             "NONE" -> {}
@@ -74,9 +98,16 @@ fun MainScreen(viewModel: AnchorViewModel) {
     }
 
     if (!isOnboarded) {
-        OnboardingScreen(onComplete = { isOnboarded = true })
+        OnboardingScreen(viewModel = viewModel, onComplete = { isOnboarded = true })
     } else if (showSettings) {
         SettingsScreen(viewModel, onBack = { showSettings = false })
+    } else if (!viewModel.appsLoaded) {
+        // Previously there was a blank black frame here while the DB/app list loaded on
+        // cold start (pageCount == 0, drawer would show "no apps"). Explicit loading state
+        // instead of an unexplained blank screen.
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary, strokeWidth = 2.dp)
+        }
     } else {
         Box(
             modifier = Modifier
@@ -98,7 +129,10 @@ fun MainScreen(viewModel: AnchorViewModel) {
                 }
         ) {
             HorizontalPager(state = pagerState) { page ->
-                TodaySurface(viewModel)
+                val space = viewModel.spaces.getOrNull(page)
+                if (space != null) {
+                    TodaySurface(viewModel, space)
+                }
             }
 
             IconButton(
@@ -121,7 +155,13 @@ fun MainScreen(viewModel: AnchorViewModel) {
                 IntentGate(
                     appName = app.label,
                     frictionLevel = friction,
-                    onProceed = { viewModel.launchApp(app.packageName, context) },
+                    onProceed = { minutes ->
+                        if (friction == "TIMER") {
+                            viewModel.launchApp(app.packageName, context, minutes)
+                        } else {
+                            viewModel.launchApp(app.packageName, context)
+                        }
+                    },
                     onCancel = { viewModel.pendingAppLaunch = null }
                 )
             }
@@ -129,24 +169,54 @@ fun MainScreen(viewModel: AnchorViewModel) {
     }
 }
 
+/**
+ * Isolated ClockDisplay to prevent the entire TodaySurface from recomposing every second.
+ */
 @Composable
-fun TodaySurface(viewModel: AnchorViewModel) {
-    val tasks by viewModel.getTasks().collectAsState(initial = emptyList())
-    val view = LocalView.current
+fun ClockDisplay(viewModel: AnchorViewModel) {
     var time by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
-    
+
+    // Formatters are expensive to allocate and were previously re-created every single tick
+    // (every second, per visible/pre-composed pager page). Cached once per composition instead.
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val dateFormat = remember { SimpleDateFormat("EEEE · d MMM", Locale.getDefault()) }
+
     val baseFontWeight = if (viewModel.isBoldEnabled) FontWeight.Bold else FontWeight.Light
     val letterSpacingVal = viewModel.letterSpacingExtra
 
     LaunchedEffect(Unit) {
-        while(true) {
+        while (true) {
             val now = Date()
-            time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
-            date = SimpleDateFormat("EEEE · d MMM", Locale.getDefault()).format(now).uppercase()
-            kotlinx.coroutines.delay(1000)
+            time = timeFormat.format(now)
+            date = dateFormat.format(now).uppercase()
+            delay(1000)
         }
     }
+
+    Column {
+        Text(
+            text = time,
+            fontSize = (76f * viewModel.fontSizeMultiplier).sp,
+            fontWeight = baseFontWeight,
+            letterSpacing = (-2f + letterSpacingVal).sp,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = date,
+            fontSize = (12f * viewModel.fontSizeMultiplier).sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = (2f + letterSpacingVal).sp,
+            color = MaterialTheme.colorScheme.secondary
+        )
+    }
+}
+
+@Composable
+fun TodaySurface(viewModel: AnchorViewModel, space: Space) {
+    val tasks by viewModel.getTasks(space.id).collectAsState(initial = emptyList())
+    val view = LocalView.current
+    val letterSpacingVal = viewModel.letterSpacingExtra
 
     Column(
         modifier = Modifier
@@ -154,42 +224,55 @@ fun TodaySurface(viewModel: AnchorViewModel) {
             .padding(horizontal = 28.dp, vertical = 48.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Text(
-                    text = time,
-                    fontSize = (76f * viewModel.fontSizeMultiplier).sp,
-                    fontWeight = baseFontWeight,
-                    letterSpacing = (-2f + letterSpacingVal).sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = viewModel.currentSpace.name,
-                    fontSize = (13f * viewModel.fontSizeMultiplier).sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (3f + letterSpacingVal).sp,
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            ClockDisplay(viewModel)
             Text(
-                text = date,
-                fontSize = (12f * viewModel.fontSizeMultiplier).sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (2f + letterSpacingVal).sp,
-                color = MaterialTheme.colorScheme.secondary
+                text = space.name,
+                fontSize = (13f * viewModel.fontSizeMultiplier).sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (3f + letterSpacingVal).sp,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
 
         if (viewModel.densityMode != DensityMode.QUIET) {
-            Column(modifier = Modifier.weight(1f).padding(top = 40.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(top = 24.dp)) {
                 ReflectionWidget(viewModel)
-                
-                Spacer(modifier = Modifier.height(24.dp))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Task Input Field
+                var newTaskText by remember { mutableStateOf("") }
+                TextField(
+                    value = newTaskText,
+                    onValueChange = { newTaskText = it },
+                    placeholder = { Text("Add priority...", color = MaterialTheme.colorScheme.secondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedIndicatorColor = MaterialTheme.colorScheme.secondary
+                    ),
+                    singleLine = true,
+                    trailingIcon = {
+                        TextButton(onClick = {
+                            if (newTaskText.isNotBlank()) {
+                                viewModel.addTask(newTaskText, space.id)
+                                newTaskText = ""
+                            }
+                        }) {
+                            Text("ADD", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -209,35 +292,37 @@ fun TodaySurface(viewModel: AnchorViewModel) {
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
 
-                tasks.forEach { task ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = task.isCompleted,
-                            onCheckedChange = { 
-                                viewModel.toggleTask(task)
-                                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                            },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = MaterialTheme.colorScheme.primary,
-                                uncheckedColor = MaterialTheme.colorScheme.secondary
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    itemsIndexed(tasks, key = { _, task -> task.id }) { _, task ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = task.isCompleted,
+                                onCheckedChange = {
+                                    viewModel.toggleTask(task)
+                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedColor = MaterialTheme.colorScheme.secondary
+                                )
                             )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = task.text,
-                            fontSize = (16f * viewModel.fontSizeMultiplier).sp,
-                            fontWeight = if (viewModel.isBoldEnabled) FontWeight.Bold else FontWeight.Normal,
-                            letterSpacing = letterSpacingVal.sp,
-                            color = if (task.isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
-                        )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = task.text,
+                                fontSize = (16f * viewModel.fontSizeMultiplier).sp,
+                                fontWeight = if (viewModel.isBoldEnabled) FontWeight.Bold else FontWeight.Normal,
+                                letterSpacing = letterSpacingVal.sp,
+                                color = if (task.isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }
@@ -265,12 +350,17 @@ fun TodaySurface(viewModel: AnchorViewModel) {
 @Composable
 fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
     val context = LocalContext.current
-    val allApps = remember { viewModel.getInstalledApps(context) }
+    val allApps = viewModel.installedApps
     var query by remember { mutableStateOf("") }
+
+    // Tracks which packages have already played their staggered entrance animation so that
+    // recomposition (e.g. every keystroke in search, which previously caused the whole
+    // visible list to visibly re-stagger/flicker) doesn't retrigger it.
+    val animatedKeys = remember { mutableStateSetOf<String>() }
 
     val visibleApps = allApps.filter { !viewModel.hiddenApps.contains(it.packageName) }
     val filteredApps = visibleApps.filter { it.label.contains(query, true) }
-    
+
     val favoriteAppsList = visibleApps.filter { viewModel.favoriteApps.contains(it.packageName) }
     val recentAppsList = viewModel.recentAppPackages.mapNotNull { pkg -> visibleApps.find { it.packageName == pkg } }
 
@@ -316,8 +406,8 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                             Text("FAVORITES", fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
-                        itemsIndexed(favoriteAppsList) { index, app ->
-                            StaggeredAppRow(index, app, viewModel, context, onClose)
+                        itemsIndexed(favoriteAppsList, key = { _, app -> "fav_${app.packageName}" }) { index, app ->
+                            StaggeredAppRow(index, app, viewModel, context, onClose, animatedKeys)
                         }
                         item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
@@ -327,8 +417,8 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                             Text("RECENT", fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
-                        itemsIndexed(recentAppsList) { index, app ->
-                            StaggeredAppRow(index, app, viewModel, context, onClose)
+                        itemsIndexed(recentAppsList, key = { _, app -> "recent_${app.packageName}" }) { index, app ->
+                            StaggeredAppRow(index, app, viewModel, context, onClose, animatedKeys)
                         }
                         item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
@@ -340,8 +430,8 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                         }
                     }
 
-                    itemsIndexed(filteredApps) { index, app ->
-                        StaggeredAppRow(index, app, viewModel, context, onClose)
+                    itemsIndexed(filteredApps, key = { _, app -> "all_${app.packageName}" }) { index, app ->
+                        StaggeredAppRow(index, app, viewModel, context, onClose, animatedKeys)
                     }
                 }
             }
@@ -377,49 +467,68 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun StaggeredAppRow(index: Int, app: AppInfo, viewModel: AnchorViewModel, context: Context, onClose: () -> Unit) {
+fun StaggeredAppRow(
+    index: Int,
+    app: AppInfo,
+    viewModel: AnchorViewModel,
+    context: Context,
+    onClose: () -> Unit,
+    animatedKeys: MutableSet<String>
+) {
     val view = LocalView.current
+    val alreadyAnimated = app.packageName in animatedKeys
+    val clampedDelay = if (alreadyAnimated) 0 else (index * 15).coerceAtMost(300)
+
     val animatedAlpha by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = tween(durationMillis = 400, delayMillis = index * 30),
-        label = "alpha"
+        animationSpec = tween(durationMillis = if (alreadyAnimated) 0 else 300, delayMillis = clampedDelay),
+        label = "alpha",
+        finishedListener = { animatedKeys.add(app.packageName) }
     )
     val animatedOffset by animateDpAsState(
         targetValue = 0.dp,
-        animationSpec = tween(durationMillis = 400, delayMillis = index * 30),
+        animationSpec = tween(durationMillis = if (alreadyAnimated) 0 else 300, delayMillis = clampedDelay),
         label = "offset"
     )
 
-    TextButton(
-        onClick = { 
-            viewModel.handleAppClick(app, context)
-            onClose()
-        },
+    // Previously this was a TextButton whose own onClick AND a combinedClickable onClick
+    // both fired viewModel.handleAppClick — redundant duplicate handling. Now a single
+    // combinedClickable Row drives both tap and long-press, and the app icon (previously
+    // never loaded at all) is shown alongside the label.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { 
+            .graphicsLayer {
                 alpha = animatedAlpha
-                translationY = (20.dp - animatedOffset).toPx()
+                translationY = (15.dp - animatedOffset).toPx()
             }
             .combinedClickable(
-                onClick = { 
+                onClick = {
                     viewModel.handleAppClick(app, context)
                     onClose()
                 },
-                onLongClick = { 
-                    viewModel.selectedAppForMenu = app 
+                onLongClick = {
+                    viewModel.selectedAppForMenu = app
                     view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 }
             )
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        if (app.icon != null) {
+            Image(
+                bitmap = app.icon.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp).clip(CircleShape)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+        }
         Text(
             text = app.label,
             fontSize = (18f * viewModel.fontSizeMultiplier).sp,
             fontWeight = if (viewModel.isBoldEnabled) FontWeight.Bold else FontWeight.Light,
             letterSpacing = viewModel.letterSpacingExtra.sp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.primary
         )
     }

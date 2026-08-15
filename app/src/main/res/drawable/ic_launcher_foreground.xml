@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple minimalist anchor glyph, matching the app's OLED/typographic aesthetic
+     and its name -- replaces the generic android:drawable/sym_def_app_icon placeholder
+     that previously shipped as the app icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- ring -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4"
+        android:pathData="M54,26 m-9,0 a9,9 0,1,1 18,0 a9,9 0,1,1 -18,0" />
+    <!-- shaft -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4"
+        android:pathData="M54,35 L54,80" />
+    <!-- crossbar -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4"
+        android:pathData="M38,48 L70,48" />
+    <!-- flukes -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4"
+        android:pathData="M30,64 C30,78 40,86 54,86 C68,86 78,78 78,64" />
+</vector>

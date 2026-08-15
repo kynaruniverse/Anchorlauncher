@@ -1,8 +1,8 @@
 package com.anchor.launcher
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -22,8 +22,17 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
     var showAddSpaceDialog by remember { mutableStateOf(false) }
     var newSpaceName by remember { mutableStateOf("") }
     var showFrictionDialog by remember { mutableStateOf<AppInfo?>(null) }
-    val context = LocalContext.current
-    val allApps = remember { viewModel.getInstalledApps(context) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Memoized app filtering to prevent redundant collection allocations on every recomposition
+    val installedApps = viewModel.installedApps
+    val filteredApps = remember(installedApps, searchQuery) {
+        if (searchQuery.isBlank()) installedApps
+        else installedApps.filter { it.label.contains(searchQuery, ignoreCase = true) }
+    }
+
+    // Isolated slider state to prevent full-screen recomposition cascades during rapid dragging
+    var tempFontSize by remember { mutableFloatStateOf(viewModel.fontSizeMultiplier) }
 
     Scaffold(
         topBar = {
@@ -37,106 +46,120 @@ fun SettingsScreen(viewModel: AnchorViewModel, onBack: () -> Unit) {
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
+                .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
         ) {
             // REFLECTION
-            Text("DAILY INTENTION", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = viewModel.oneThingReflection,
-                onValueChange = { viewModel.setOneThing(it) },
-                placeholder = { Text("What matters today?") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            
-            Spacer(modifier = Modifier.height(32.dp))
+            item {
+                Text("DAILY INTENTION", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = viewModel.oneThingReflection,
+                    onValueChange = { viewModel.setOneThing(it) },
+                    placeholder = { Text("What matters today?") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+            }
 
             // SPACES MANAGEMENT
-            Text("SPACES", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(16.dp))
-            viewModel.spaces.forEach { space ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(space.name, fontWeight = if (viewModel.currentSpace.id == space.id) FontWeight.Bold else FontWeight.Normal)
-                    IconButton(onClick = { viewModel.deleteSpace(space.id) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+            item {
+                Text("SPACES", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(16.dp))
+                viewModel.spaces.forEach { space ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(space.name, fontWeight = if (viewModel.currentSpace.id == space.id) FontWeight.Bold else FontWeight.Normal)
+                        IconButton(onClick = { viewModel.deleteSpace(space.id) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
+                TextButton(onClick = { showAddSpaceDialog = true }) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ADD NEW SPACE")
+                }
+                Spacer(modifier = Modifier.height(32.dp))
             }
-            TextButton(onClick = { showAddSpaceDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("ADD NEW SPACE")
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
 
             // FRICTION RULES
-            Text("INTENTIONAL FRICTION", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(16.dp))
-            val protectedApps = allApps.filter { viewModel.appFrictionLevels.containsKey(it.packageName) && viewModel.appFrictionLevels[it.packageName] != "OFF" }
-            protectedApps.forEach { app ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(app.label)
-                    TextButton(onClick = { showFrictionDialog = app }) {
-                        Text(viewModel.appFrictionLevels[app.packageName] ?: "OFF", color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-            TextButton(onClick = { /* Open full app list to add friction */ }) {
-                Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("ADD APP FRICTION")
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // DENSITY
-            Text("DENSITY", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(16.dp))
-            DensityMode.values().forEach { mode ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(mode.name, color = if(viewModel.densityMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
-                    RadioButton(selected = viewModel.densityMode == mode, onClick = { viewModel.setDensity(mode) })
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // TYPOGRAPHY
-            Text("TYPOGRAPHY", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text("Font Size: ${(viewModel.fontSizeMultiplier * 100).toInt()}%", fontSize = 14.sp)
-            Slider(
-                value = viewModel.fontSizeMultiplier,
-                onValueChange = { 
-                    viewModel.fontSizeMultiplier = it
-                    viewModel.updateSetting("font_size", it.toString())
-                },
-                valueRange = 0.8f..1.5f
-            )
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Bold Text", fontSize = 14.sp)
-                Switch(
-                    checked = viewModel.isBoldEnabled,
-                    onCheckedChange = { 
-                        viewModel.isBoldEnabled = it
-                        viewModel.updateSetting("bold_enabled", it.toString())
-                    }
+            item {
+                Text("INTENTIONAL FRICTION", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search apps for friction rules...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
-            Text("ABOUT", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("ANCHOR LAUNCHER", fontWeight = FontWeight.Bold)
-            Text("Version 1.0.0 · Final MVP", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+            items(filteredApps, key = { it.packageName }) { app ->
+                val friction = viewModel.appFrictionLevels[app.packageName] ?: "OFF"
+                if (friction != "OFF" || searchQuery.isNotBlank()) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(app.label, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { showFrictionDialog = app }) {
+                            Text(friction, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // DENSITY
+                Text("DENSITY", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(16.dp))
+                DensityMode.values().forEach { mode ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(mode.name, color = if(viewModel.densityMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
+                        RadioButton(selected = viewModel.densityMode == mode, onClick = { viewModel.setDensity(mode) })
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // TYPOGRAPHY
+                Text("TYPOGRAPHY", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Font Size: ${(tempFontSize * 100).toInt()}%", fontSize = 14.sp)
+                Slider(
+                    value = tempFontSize,
+                    onValueChange = { tempFontSize = it },
+                    onValueChangeFinished = {
+                        viewModel.fontSizeMultiplier = tempFontSize
+                        viewModel.updateSetting("font_size", tempFontSize.toString())
+                    },
+                    valueRange = 0.8f..1.5f
+                )
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Bold Text", fontSize = 14.sp)
+                    Switch(
+                        checked = viewModel.isBoldEnabled,
+                        onCheckedChange = {
+                            viewModel.isBoldEnabled = it
+                            viewModel.updateSetting("bold_enabled", it.toString())
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(48.dp))
+                Text("ABOUT", fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("ANCHOR LAUNCHER", fontWeight = FontWeight.Bold)
+                Text("Version 1.0.0 · Final MVP", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(48.dp))
+            }
         }
 
         if (showAddSpaceDialog) {

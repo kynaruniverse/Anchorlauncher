@@ -94,6 +94,12 @@ interface AnchorDao {
     suspend fun setFrictionLevel(friction: AppFrictionEntity)
 }
 
+// Schema version reset to 1: the app has never shipped, so there is no installed base
+// carrying the old version-7 schema history forward. Once this ships, replace
+// fallbackToDestructiveMigration() in AnchorViewModel with real Migration objects before
+// bumping this version again -- destructive migration silently wipes tasks/favorites/
+// hidden apps/friction rules/spaces on every schema change, which is fine pre-release
+// and dangerous post-release.
 @Database(
     entities = [
         Task::class,
@@ -103,7 +109,7 @@ interface AnchorDao {
         SpaceEntity::class,
         AppFrictionEntity::class
     ],
-    version = 7
+    version = 1
 )
 abstract class AnchorDatabase : RoomDatabase() {
     abstract fun anchorDao(): AnchorDao

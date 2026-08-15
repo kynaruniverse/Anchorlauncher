@@ -10,16 +10,25 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/**
+ * Parses a duration label like "10 Minutes" -> 10, "No Limit" -> null.
+ * Exposed so MainActivity/ViewModel can turn the user's choice into a real
+ * timed-unlock window for TIMER-friction apps (previously this value was
+ * captured and then silently discarded).
+ */
+fun parseDurationMinutes(duration: String): Int? {
+    if (duration.equals("No Limit", ignoreCase = true)) return null
+    return duration.takeWhile { it.isDigit() }.toIntOrNull()
+}
+
 @Composable
 fun IntentGate(
     appName: String,
     frictionLevel: String,
-    onProceed: () -> Unit,
+    onProceed: (durationMinutes: Int?) -> Unit,
     onCancel: () -> Unit
 ) {
     var step by remember { mutableStateOf(if (frictionLevel == "LIGHT") 2 else 1) }
-    var selectedReason by remember { mutableStateOf<String?>(null) }
-    var selectedDuration by remember { mutableStateOf<String?>(null) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -39,7 +48,7 @@ fun IntentGate(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
-            
+
             Spacer(modifier = Modifier.height(48.dp))
 
             if (step == 1) {
@@ -55,9 +64,8 @@ fun IntentGate(
                 val reasons = listOf("Something specific", "Search for info", "Just browsing")
                 reasons.forEach { reason ->
                     OutlinedButton(
-                        onClick = { 
-                            selectedReason = reason
-                            if (frictionLevel == "INTENT") onProceed() else step = 2
+                        onClick = {
+                            if (frictionLevel == "INTENT") onProceed(null) else step = 2
                         },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                     ) {
@@ -67,7 +75,7 @@ fun IntentGate(
             } else if (step == 2) {
                 // Step 2: How long?
                 Text(
-                    text = "How long do you need?",
+                    text = if (frictionLevel == "TIMER") "How long do you need?" else "One more thing —",
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.secondary,
                     textAlign = TextAlign.Center
@@ -77,9 +85,8 @@ fun IntentGate(
                 val durations = listOf("10 Minutes", "20 Minutes", "30 Minutes", "No Limit")
                 durations.forEach { duration ->
                     OutlinedButton(
-                        onClick = { 
-                            selectedDuration = duration
-                            onProceed()
+                        onClick = {
+                            onProceed(parseDurationMinutes(duration))
                         },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                     ) {
@@ -89,7 +96,7 @@ fun IntentGate(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             TextButton(onClick = onCancel) {
                 Text("CANCEL", color = MaterialTheme.colorScheme.secondary, letterSpacing = 2.sp)
             }

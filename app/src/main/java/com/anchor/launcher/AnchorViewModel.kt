@@ -1,15 +1,20 @@
 package com.anchor.launcher
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import androidx.compose.runtime.*
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class AnchorViewModel(application: Application) : AndroidViewModel(application) {
@@ -22,13 +27,22 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     var densityMode by mutableStateOf(DensityMode.BALANCED)
     var focusModeActive by mutableStateOf(false)
     var focusTimeRemaining by mutableIntStateOf(0)
-    
+
     var pendingAppLaunch by mutableStateOf<AppInfo?>(null)
     var selectedAppForMenu by mutableStateOf<AppInfo?>(null)
 
     var hiddenApps = mutableStateListOf<String>()
     var favoriteApps = mutableStateListOf<String>()
     var recentAppPackages = mutableStateListOf<String>()
+
+    // Async loaded apps
+    var installedApps = mutableStateListOf<AppInfo>()
+        private set
+
+    // Whether the initial app-list load has completed at least once. Lets the UI show a
+    // loading state instead of a blank drawer/pager on first cold-start frame.
+    var appsLoaded by mutableStateOf(false)
+        private set
 
     var fontSizeMultiplier by mutableFloatStateOf(1.0f)
     var letterSpacingExtra by mutableFloatStateOf(0.0f)
@@ -43,9 +57,15 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     // Friction Levels & Reflection
     var appFrictionLevels = mutableStateMapOf<String, String>()
     var oneThingReflection by mutableStateOf("")
-    var screenTimeMinutes by mutableIntStateOf(88)
+    var screenTimeMinutes by mutableIntStateOf(0)
 
-    val currentSpace get() = spaces.getOrElse(currentSpaceIndex) { 
+    // Package -> epoch millis until which a TIMER-friction app can be relaunched without
+    // going through IntentGate again. Populated when the user picks a duration in the gate.
+    private val timedUnlocks = mutableMapOf<String, Long>()
+
+    private var packageChangeReceiver: BroadcastReceiver? = null
+
+    val currentSpace get() = spaces.getOrElse(currentSpaceIndex) {
         if (spaces.isNotEmpty()) spaces[0] else Space("default", "HOME", emptyList())
     }
 
@@ -58,11 +78,11 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
             dao.getSetting("swipe_down_action")?.let { swipeDownAction = it }
             dao.getSetting("double_tap_action")?.let { doubleTapAction = it }
             dao.getSetting("one_thing")?.let { oneThingReflection = it }
-            
+
             hiddenApps.addAll(dao.getHiddenApps())
             favoriteApps.addAll(dao.getFavorites())
 
-            dao.getAllFrictionLevels().forEach { 
+            dao.getAllFrictionLevels().forEach {
                 appFrictionLevels[it.packageName] = it.level
             }
 
@@ -77,11 +97,65 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
             } else {
                 spaces.addAll(savedSpaces.map { Space(it.id, it.name, emptyList()) })
             }
+
+            // Load apps asynchronously on IO thread
+            loadInstalledApps(application)
+            registerPackageChangeReceiver(application)
+        }
+    }
+
+    private suspend fun loadInstalledApps(context: Context) {
+        val apps = withContext(Dispatchers.IO) {
+            val intent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+            context.packageManager.queryIntentActivities(intent, 0).map { resolveInfo ->
+                val icon = try {
+                    resolveInfo.loadIcon(context.packageManager).toBitmap(width = 128, height = 128)
+                } catch (e: Exception) {
+                    null
+                }
+                AppInfo(
+                    label = resolveInfo.loadLabel(context.packageManager).toString(),
+                    packageName = resolveInfo.activityInfo.packageName,
+                    icon = icon
+                )
+            }.sortedBy { it.label }
+        }
+        installedApps.clear()
+        installedApps.addAll(apps)
+        appsLoaded = true
+    }
+
+    /**
+     * A launcher's app list goes stale the moment the user installs/uninstalls anything
+     * while Anchor is backgrounded (there was previously no mechanism to refresh it at all).
+     * This keeps the drawer in sync without requiring a process restart.
+     */
+    private fun registerPackageChangeReceiver(context: Context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                viewModelScope.launch { loadInstalledApps(context) }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        context.registerReceiver(receiver, filter)
+        packageChangeReceiver = receiver
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        packageChangeReceiver?.let {
+            try { getApplication<Application>().unregisterReceiver(it) } catch (e: Exception) {}
         }
     }
 
     fun setFrictionLevel(packageName: String, level: String) {
         appFrictionLevels[packageName] = level
+        timedUnlocks.remove(packageName)
         viewModelScope.launch {
             dao.setFrictionLevel(AppFrictionEntity(packageName, level))
         }
@@ -158,10 +232,10 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
         selectedAppForMenu = null
     }
 
-    fun getTasks() = dao.getTasksForSpace(currentSpace.id)
+    fun getTasks(spaceId: String) = dao.getTasksForSpace(spaceId)
 
-    fun addTask(text: String) {
-        viewModelScope.launch { dao.insertTask(Task(text = text, spaceId = currentSpace.id)) }
+    fun addTask(text: String, spaceId: String) {
+        viewModelScope.launch { dao.insertTask(Task(text = text, spaceId = spaceId)) }
     }
 
     fun toggleTask(task: Task) {
@@ -183,16 +257,26 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     fun handleAppClick(app: AppInfo, context: Context) {
         recentAppPackages.remove(app.packageName)
         recentAppPackages.add(0, app.packageName)
-        if (recentAppPackages.size > 5) {
-            recentAppPackages.removeAt(5)
+        if (recentAppPackages.size > AnchorDefaults.MAX_RECENT_APPS) {
+            recentAppPackages.removeAt(AnchorDefaults.MAX_RECENT_APPS)
         }
 
         val friction = appFrictionLevels[app.packageName] ?: "OFF"
-        
+
         when (friction) {
             "OFF" -> launchApp(app.packageName, context)
-            "LIGHT", "INTENT", "TIMER" -> {
+            "LIGHT", "INTENT" -> {
                 pendingAppLaunch = app
+            }
+            "TIMER" -> {
+                val unlockUntil = timedUnlocks[app.packageName]
+                if (unlockUntil != null && System.currentTimeMillis() < unlockUntil) {
+                    // Still inside a previously granted timed window -- skip the gate.
+                    launchApp(app.packageName, context)
+                } else {
+                    timedUnlocks.remove(app.packageName)
+                    pendingAppLaunch = app
+                }
             }
             "BLOCK" -> {
                 if (focusModeActive) {
@@ -205,8 +289,16 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun launchApp(packageName: String, context: Context) {
+    /**
+     * @param timerMinutes when set, grants a timed unlock window for this package (used by
+     * the TIMER friction level) so the user isn't re-gated on every open for the duration
+     * they explicitly chose. Null means "just this once."
+     */
+    fun launchApp(packageName: String, context: Context, timerMinutes: Int? = null) {
         pendingAppLaunch = null
+        if (timerMinutes != null && timerMinutes > 0) {
+            timedUnlocks[packageName] = System.currentTimeMillis() + timerMinutes * 60_000L
+        }
         val intent = context.packageManager.getLaunchIntentForPackage(packageName)
         if (intent != null) {
             context.startActivity(intent)
@@ -216,9 +308,9 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     fun executeCommand(command: String, context: Context): Boolean {
         val parts = command.lowercase().trim().split(" ", limit = 2)
         if (parts.isEmpty()) return false
-        
+
         val action = parts[0]
-        val arg = parts.getOrNull(1) ?: ""
+        val arg = parts.getOrNull(1)?.trim() ?: ""
 
         return when (action) {
             "focus" -> {
@@ -244,6 +336,7 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
                 true
             }
             "call" -> {
+                if (arg.isBlank()) return false
                 val intent = Intent(Intent.ACTION_DIAL).apply {
                     data = Uri.parse("tel:$arg")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -252,6 +345,7 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
                 true
             }
             "message" -> {
+                if (arg.isBlank()) return false
                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                     data = Uri.parse("smsto:$arg")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -261,12 +355,5 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
             }
             else -> false
         }
-    }
-
-    fun getInstalledApps(context: Context): List<AppInfo> {
-        val intent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
-        return context.packageManager.queryIntentActivities(intent, 0).map {
-            AppInfo(it.loadLabel(context.packageManager).toString(), it.activityInfo.packageName)
-        }.sortedBy { it.label }
     }
 }
