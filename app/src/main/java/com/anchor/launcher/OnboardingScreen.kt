@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
@@ -30,21 +29,23 @@ fun OnboardingScreen(viewModel: AnchorViewModel, onComplete: () -> Unit) {
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
+            modifier = Modifier.fillMaxSize().padding(Spacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             when (step) {
                 1 -> {
-                    Text(stringResource(R.string.app_name), fontSize = 32.sp, letterSpacing = 12.sp, fontWeight = FontWeight.ExtraLight)
-                    Spacer(modifier = Modifier.height(24.dp))
+                    // Matches AnchorType.hero exactly -- this is the one place that token
+                    // is used, a deliberately singular "first impression" moment.
+                    Text(stringResource(R.string.app_name), style = AnchorType.hero)
+                    Spacer(modifier = Modifier.height(Spacing.lg))
                     Text(stringResource(R.string.onboarding_tagline), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
-                    Spacer(modifier = Modifier.height(64.dp))
+                    Spacer(modifier = Modifier.height(Spacing.xxxl))
                     Button(onClick = { step = 2 }) { Text(stringResource(R.string.begin)) }
                 }
                 2 -> {
-                    Text(stringResource(R.string.choose_density_title), fontSize = 12.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Text(stringResource(R.string.choose_density_title), style = AnchorType.label)
+                    Spacer(modifier = Modifier.height(Spacing.xl))
                     // Previously these buttons only advanced the onboarding step and never
                     // called viewModel.setDensity(), so the very first choice a new user
                     // makes was silently discarded and the app always defaulted to BALANCED.
@@ -62,10 +63,10 @@ fun OnboardingScreen(viewModel: AnchorViewModel, onComplete: () -> Unit) {
                     }
                 }
                 3 -> {
-                    Text(stringResource(R.string.onboarding_ready_title), fontSize = 24.sp, letterSpacing = 4.sp)
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(stringResource(R.string.onboarding_ready_title), style = AnchorType.title)
+                    Spacer(modifier = Modifier.height(Spacing.lg))
                     Text(stringResource(R.string.onboarding_ready_body), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(Spacing.xxl))
                     // The manifest declares the HOME/LAUNCHER intent filters needed for
                     // Anchor to be selectable as a default launcher, but nothing ever
                     // actually prompted the user to set it as default -- onboarding used to
@@ -106,9 +107,9 @@ private fun requestDefaultLauncher(
 fun DensityOption(title: String, desc: String, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(Spacing.sm)) {
             Text(title, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
             Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
         }

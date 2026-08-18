@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Same category as PACKAGE_USAGE_STATS below: normal-level declaration is required for
+         the API to function, but the actual grant is a separate, non-runtime-dialog app-op
+         the user gives from Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS (see
+         AnchorViewModel.hasDndAccess() / setDnd(), used for "Do Not Disturb during Focus"). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Special/protected permission: not grantable via a runtime dialog. The app must send
          the user to Settings.ACTION_USAGE_ACCESS_SETTINGS (see ScreenTimeWidget) so they can
          grant it manually; declaring it here is still required for checkOpNoThrow to work. -->

@@ -31,13 +31,26 @@ data class FavoriteAppEntity(
 data class SpaceEntity(
     @PrimaryKey val id: String,
     val name: String,
-    val density: String
+    val density: String,
+    // Comma-separated package names. Empty string means "unrestricted" (show every app),
+    // which is the default and matches pre-existing behavior for spaces created before
+    // this column existed. Stored as a flat string rather than a Room TypeConverter/List
+    // to keep this simple for a single-column, order-independent set of package names.
+    val allowedApps: String = ""
 )
 
 @Entity(tableName = "app_friction")
 data class AppFrictionEntity(
     @PrimaryKey val packageName: String,
-    val level: String // OFF, LIGHT, INTENT, TIMER, BLOCK
+    val level: String // OFF, LIGHT, INTENT, TIMER, BLOCK, SCHEDULE
+)
+
+@Entity(tableName = "presets")
+data class PresetEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val focusMinutes: Int,
+    val spaceId: String = ""
 )
 
 @Dao
@@ -87,19 +100,88 @@ interface AnchorDao {
     @Query("DELETE FROM spaces WHERE id = :spaceId")
     suspend fun deleteSpace(spaceId: String)
 
+    @Query("UPDATE spaces SET allowedApps = :allowedApps WHERE id = :spaceId")
+    suspend fun updateSpaceAllowedApps(spaceId: String, allowedApps: String)
+
     @Query("SELECT * FROM app_friction")
     suspend fun getAllFrictionLevels(): List<AppFrictionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun setFrictionLevel(friction: AppFrictionEntity)
+
+    @Query("SELECT * FROM presets")
+    suspend fun getAllPresetsOnce(): List<PresetEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPreset(preset: PresetEntity)
+
+    @Query("DELETE FROM presets WHERE id = :presetId")
+    suspend fun deletePreset(presetId: String)
+
+    // --- Backup/export support ---
+
+    @Query("SELECT * FROM tasks")
+    suspend fun getAllTasksOnce(): List<Task>
+
+    @Query("SELECT * FROM settings")
+    suspend fun getAllSettingsOnce(): List<SettingEntity>
+
+    @Query("DELETE FROM tasks")
+    suspend fun clearTasks()
+
+    @Query("DELETE FROM hidden_apps")
+    suspend fun clearHiddenApps()
+
+    @Query("DELETE FROM favorites")
+    suspend fun clearFavorites()
+
+    @Query("DELETE FROM spaces")
+    suspend fun clearSpaces()
+
+    @Query("DELETE FROM app_friction")
+    suspend fun clearFriction()
+
+    @Query("DELETE FROM presets")
+    suspend fun clearPresets()
+
+    /**
+     * Wipes and replaces every table with the contents of an imported backup, as a single
+     * transaction (Room supports default-implemented @Dao methods that call the interface's
+     * other @Insert/@Delete-annotated methods and wraps them atomically). Settings are
+     * upserted rather than wiped first, so a partial/older backup doesn't blow away keys it
+     * simply doesn't mention.
+     */
+    @Transaction
+    suspend fun replaceAllData(
+        tasks: List<Task>,
+        hiddenApps: List<HiddenAppEntity>,
+        favorites: List<FavoriteAppEntity>,
+        spaces: List<SpaceEntity>,
+        friction: List<AppFrictionEntity>,
+        presets: List<PresetEntity>,
+        settings: List<SettingEntity>
+    ) {
+        clearTasks()
+        tasks.forEach { insertTask(it) }
+        clearHiddenApps()
+        hiddenApps.forEach { hideApp(it) }
+        clearFavorites()
+        favorites.forEach { addFavorite(it) }
+        clearSpaces()
+        spaces.forEach { insertSpace(it) }
+        clearFriction()
+        friction.forEach { setFrictionLevel(it) }
+        clearPresets()
+        presets.forEach { insertPreset(it) }
+        settings.forEach { saveSetting(it) }
+    }
 }
 
-// Schema version reset to 1: the app has never shipped, so there is no installed base
-// carrying the old version-7 schema history forward. Once this ships, replace
-// fallbackToDestructiveMigration() in AnchorViewModel with real Migration objects before
-// bumping this version again -- destructive migration silently wipes tasks/favorites/
-// hidden apps/friction rules/spaces on every schema change, which is fine pre-release
-// and dangerous post-release.
+// Schema version reset to 1 previously (pre-release, no installed base to protect); bumped
+// to 2 to add SpaceEntity.allowedApps, and to 3 here to add the presets table. Still
+// pre-release, so fallbackToDestructiveMigration() remains acceptable -- replace it with
+// real Migration objects before shipping, since from that point on every schema bump would
+// otherwise silently wipe tasks/favorites/hidden apps/friction rules/spaces/presets.
 @Database(
     entities = [
         Task::class,
@@ -107,9 +189,10 @@ interface AnchorDao {
         HiddenAppEntity::class,
         FavoriteAppEntity::class,
         SpaceEntity::class,
-        AppFrictionEntity::class
+        AppFrictionEntity::class,
+        PresetEntity::class
     ],
-    version = 1
+    version = 3
 )
 abstract class AnchorDatabase : RoomDatabase() {
     abstract fun anchorDao(): AnchorDao

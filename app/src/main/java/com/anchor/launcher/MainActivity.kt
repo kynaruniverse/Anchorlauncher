@@ -45,7 +45,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val viewModel: AnchorViewModel = viewModel()
-            AnchorTheme {
+            AnchorTheme(
+                baseColor = colorForId(viewModel.baseColorId),
+                accentColor = colorForId(viewModel.accentColorId)
+            ) {
                 MainScreen(viewModel)
             }
         }
@@ -75,7 +78,7 @@ fun MainScreen(viewModel: AnchorViewModel) {
     }
 
     fun handleGestureAction(action: String) {
-        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        view.hapticFeedback(HapticFeedbackConstants.LONG_PRESS, viewModel)
         when (action) {
             "NOTIFICATIONS" -> {
                 // There is no public, stable API for a launcher to expand the notification
@@ -90,7 +93,7 @@ fun MainScreen(viewModel: AnchorViewModel) {
                     val expandMethod = statusBarManager.getMethod("expandNotificationsPanel")
                     expandMethod.invoke(statusBarService)
                 } catch (e: Exception) {
-                    view.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                    view.hapticFeedback(HapticFeedbackConstants.REJECT, viewModel)
                 }
             }
             "DRAWER" -> showDrawer = true
@@ -117,7 +120,7 @@ fun MainScreen(viewModel: AnchorViewModel) {
                     detectVerticalDragGestures { _, dragAmount ->
                         if (dragAmount < -50) {
                             showDrawer = true
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            view.hapticFeedback(HapticFeedbackConstants.CLOCK_TICK, viewModel)
                         }
                         if (dragAmount > 50) handleGestureAction(viewModel.swipeDownAction)
                     }
@@ -145,8 +148,8 @@ fun MainScreen(viewModel: AnchorViewModel) {
 
             AnimatedVisibility(
                 visible = showDrawer,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                enter = slideInVertically(animationSpec = tween(Motion.standard, easing = Motion.standardEasing), initialOffsetY = { it }) + fadeIn(animationSpec = tween(Motion.standard)),
+                exit = slideOutVertically(animationSpec = tween(Motion.standard, easing = Motion.standardEasing), targetOffsetY = { it }) + fadeOut(animationSpec = tween(Motion.standard))
             ) {
                 AppDrawer(viewModel) { showDrawer = false }
             }
@@ -308,10 +311,12 @@ fun TodaySurface(viewModel: AnchorViewModel, space: Space) {
                                 checked = task.isCompleted,
                                 onCheckedChange = {
                                     viewModel.toggleTask(task)
-                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                    view.hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY, viewModel)
                                 },
                                 colors = CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.primary,
+                                    // Tertiary gold for the completed state -- one of this
+                                    // app's three sanctioned accent moments (see Theme.kt).
+                                    checkedColor = MaterialTheme.colorScheme.tertiary,
                                     uncheckedColor = MaterialTheme.colorScheme.secondary
                                 )
                             )
@@ -334,13 +339,19 @@ fun TodaySurface(viewModel: AnchorViewModel, space: Space) {
         if (viewModel.densityMode == DensityMode.CONTROL) {
             Column {
                 FocusWidget(viewModel)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
+                PresetsWidget(viewModel)
+                Spacer(modifier = Modifier.height(Spacing.sm))
+                // Previously built but never actually invoked anywhere in the app -- a
+                // fully working widget with no way for a user to ever see it.
+                BreathingWidget(viewModel)
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 CalendarWidget()
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 ScreenTimeWidget(viewModel)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 WeatherWidget()
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 BatteryWidget()
             }
         }
@@ -364,7 +375,16 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
     // already happening for some other reason (search query changing, etc).
     val animatedKeys = remember { mutableSetOf<String>() }
 
-    val visibleApps = allApps.filter { !viewModel.hiddenApps.contains(it.packageName) }
+    // Spaces can restrict which apps appear here (see Space.allowedApps / setSpaceAllowedApps).
+    // Empty allowedApps means unrestricted -- the default, and the only behavior before this
+    // filter existed. When restricted, favorites/recent/all all derive from visibleApps below,
+    // so a single filter here keeps every section in the drawer consistently scoped to the
+    // current space instead of each section needing its own check.
+    val currentSpace = viewModel.currentSpace
+    val visibleApps = allApps.filter {
+        !viewModel.hiddenApps.contains(it.packageName) &&
+            (currentSpace.allowedApps.isEmpty() || currentSpace.allowedApps.contains(it.packageName))
+    }
     val filteredApps = visibleApps.filter { it.label.contains(query, true) }
 
     val favoriteAppsList = visibleApps.filter { viewModel.favoriteApps.contains(it.packageName) }
@@ -409,7 +429,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     if (query.isEmpty() && favoriteAppsList.isNotEmpty()) {
                         item {
-                            Text(stringResource(R.string.favorites_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                            Text(stringResource(R.string.favorites_title), style = AnchorType.label, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         itemsIndexed(favoriteAppsList, key = { _, app -> "fav_${app.packageName}" }) { index, app ->
@@ -420,7 +440,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
 
                     if (query.isEmpty() && recentAppsList.isNotEmpty()) {
                         item {
-                            Text(stringResource(R.string.recent_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                            Text(stringResource(R.string.recent_title), style = AnchorType.label, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         itemsIndexed(recentAppsList, key = { _, app -> "recent_${app.packageName}" }) { index, app ->
@@ -431,7 +451,7 @@ fun AppDrawer(viewModel: AnchorViewModel, onClose: () -> Unit) {
 
                     if (query.isEmpty()) {
                         item {
-                            Text(stringResource(R.string.all_apps_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
+                            Text(stringResource(R.string.all_apps_title), style = AnchorType.label, color = MaterialTheme.colorScheme.secondary)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
@@ -487,13 +507,13 @@ fun StaggeredAppRow(
 
     val animatedAlpha by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = tween(durationMillis = if (alreadyAnimated) 0 else 300, delayMillis = clampedDelay),
+        animationSpec = tween(durationMillis = if (alreadyAnimated) 0 else Motion.standard, delayMillis = clampedDelay),
         label = "alpha",
         finishedListener = { animatedKeys.add(app.packageName) }
     )
     val animatedOffset by animateDpAsState(
         targetValue = 0.dp,
-        animationSpec = tween(durationMillis = if (alreadyAnimated) 0 else 300, delayMillis = clampedDelay),
+        animationSpec = tween(durationMillis = if (alreadyAnimated) 0 else Motion.standard, delayMillis = clampedDelay),
         label = "offset"
     )
 
@@ -515,7 +535,7 @@ fun StaggeredAppRow(
                 },
                 onLongClick = {
                     viewModel.selectedAppForMenu = app
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    view.hapticFeedback(HapticFeedbackConstants.LONG_PRESS, viewModel)
                 }
             )
             .padding(vertical = 8.dp),

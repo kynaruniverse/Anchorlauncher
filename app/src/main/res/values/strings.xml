@@ -29,6 +29,77 @@
     <string name="friction_timer">TIMER</string>
     <string name="friction_block">BLOCK</string>
 
+    <string name="friction_off_desc">Opens immediately, no questions</string>
+    <string name="friction_light_desc">One quick reason before it opens</string>
+    <string name="friction_intent_desc">Always asks why before opening</string>
+    <string name="friction_timer_desc">Set a time limit, then it opens freely until it expires</string>
+    <string name="friction_block_desc">Blocked only during an active Focus session — opens normally otherwise</string>
+    <string name="friction_schedule">SCHEDULE</string>
+    <string name="friction_schedule_desc">Blocked only during your Schedule hours below</string>
+
+    <!-- Gestures (display labels only; the underlying "NOTIFICATIONS"/"DRAWER"/"NONE"
+         keys are interpreted directly by MainScreen.handleGestureAction(). See Labels.kt.) -->
+    <string name="gestures_title">GESTURES</string>
+    <string name="swipe_down_action_label">Swipe Down</string>
+    <string name="double_tap_action_label">Double Tap</string>
+    <string name="gesture_notifications">NOTIFICATIONS</string>
+    <string name="gesture_drawer">APP DRAWER</string>
+    <string name="gesture_none">NOTHING</string>
+    <string name="choose_gesture_action_title">Choose Action</string>
+
+    <!-- Colors: base + accent, both picked from AnchorPalette (ColorPalette.kt); a fixed
+         set of 15 muted, calm colors. Replaces the earlier 4-option gold/sage/blue/mono
+         accent-only system. -->
+    <string name="colors_title">COLORS</string>
+    <string name="color_base_label">Base</string>
+    <string name="color_accent_label">Accent</string>
+    <string name="color_ebony">Ebony</string>
+    <string name="color_reseda_green">Reseda Green</string>
+    <string name="color_cambridge_blue">Cambridge Blue</string>
+    <string name="color_sage">Sage</string>
+    <string name="color_pearl">Pearl</string>
+    <string name="color_ivory">Ivory</string>
+    <string name="color_brown_sugar">Brown Sugar</string>
+    <string name="color_slate_gray">Slate Gray</string>
+    <string name="color_powder_blue">Powder Blue</string>
+    <string name="color_silver">Silver</string>
+    <string name="color_dim_gray">Dim Gray</string>
+    <string name="color_black_olive">Black Olive</string>
+    <string name="color_khaki">Khaki</string>
+    <string name="color_tea_rose">Tea Rose</string>
+    <string name="color_old_rose">Old Rose</string>
+
+    <!-- Feedback (haptics + Do Not Disturb on Focus) -->
+    <string name="feedback_title">FEEDBACK</string>
+    <string name="haptics_label">Haptics</string>
+    <string name="dnd_on_focus_label">Do Not Disturb during Focus</string>
+
+    <!-- Backup -->
+    <string name="backup_title">BACKUP</string>
+    <string name="export_backup">EXPORT BACKUP</string>
+    <string name="import_backup">IMPORT BACKUP</string>
+    <string name="backup_exported">Backup saved</string>
+    <string name="backup_imported">Backup restored</string>
+    <string name="backup_import_failed">Import failed — file may be corrupted or not an Anchor backup</string>
+
+    <!-- Schedule (used by the SCHEDULE friction level) -->
+    <string name="schedule_title">SCHEDULE</string>
+    <string name="schedule_enabled_label">Enabled</string>
+    <string name="schedule_start_label">Start: %1$02d:00</string>
+    <string name="schedule_end_label">End: %1$02d:00</string>
+
+    <!-- Presets -->
+    <string name="presets_title">PRESETS</string>
+    <string name="add_preset">ADD PRESET</string>
+    <string name="new_preset_dialog_title">New Preset</string>
+    <string name="preset_name_label">Preset Name</string>
+    <string name="preset_duration_label">Focus Duration</string>
+    <string name="preset_space_label">Space</string>
+    <string name="preset_space_current">Current Space (don\'t switch)</string>
+    <string name="preset_minutes_format">%1$d min</string>
+    <string name="preset_summary_with_space">%1$d min · %2$s</string>
+    <string name="preset_summary_current_space">%1$d min</string>
+
     <!-- Intent Gate -->
     <string name="intent_gate_why">Why are you opening this?</string>
     <string name="intent_gate_reason_specific">Something specific</string>
@@ -89,11 +160,17 @@
     <string name="spaces_title">SPACES</string>
     <string name="delete_content_description">Delete</string>
     <string name="add_new_space">ADD NEW SPACE</string>
+    <string name="all_apps_subtitle">All apps</string>
+    <string name="apps_selected_count">%1$d apps</string>
+    <string name="manage_space_apps_title">Apps in %1$s</string>
+    <string name="restrict_space_toggle">Restrict this space</string>
+    <string name="search_apps_simple_placeholder">Search apps…</string>
     <string name="intentional_friction_title">INTENTIONAL FRICTION</string>
     <string name="search_friction_placeholder">Search apps for friction rules…</string>
     <string name="density_title">DENSITY</string>
     <string name="typography_title">TYPOGRAPHY</string>
     <string name="font_size_label">Font Size: %1$d%%</string>
+    <string name="letter_spacing_label">Letter Spacing</string>
     <string name="bold_text">Bold Text</string>
     <string name="about_title">ABOUT</string>
     <string name="app_full_name">ANCHOR LAUNCHER</string>

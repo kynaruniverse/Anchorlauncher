@@ -1,11 +1,13 @@
 package com.anchor.launcher
 
 import android.app.Application
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.view.View
 import androidx.compose.runtime.*
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
@@ -15,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
 
 class AnchorViewModel(application: Application) : AndroidViewModel(application) {
@@ -51,6 +55,32 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     var swipeDownAction by mutableStateOf("NOTIFICATIONS")
     var doubleTapAction by mutableStateOf("NONE")
 
+    // Haptics on/off. Previously ~9 raw view.performHapticFeedback(...) call sites across
+    // MainActivity/Widgets had no way to be disabled -- see the View.hapticFeedback()
+    // extension below, which every one of them now goes through.
+    var hapticsEnabled by mutableStateOf(true)
+
+    // Curated base/accent color ids from AnchorPalette (see ColorPalette.kt) -- picked in
+    // Settings > Colors. Both draw from the same 15-color muted palette; base drives the
+    // background/text scheme (see anchorColorScheme() in Theme.kt), accent stays reserved
+    // for the three "active state" moments described there.
+    var baseColorId by mutableStateOf("black_olive")
+    var accentColorId by mutableStateOf("sage")
+
+    // Whether starting a Focus session should also enable Android's Do Not Disturb.
+    // Requires a separate, non-runtime-dialog permission grant -- see hasDndAccess().
+    var dndOnFocusEnabled by mutableStateOf(false)
+
+    // Global schedule window during which SCHEDULE-friction apps are gated (e.g. 22-7 for
+    // "bedtime"). One shared window rather than a per-app schedule matrix, matching the
+    // app's preference for one simple rule over a complex rules engine.
+    var scheduleEnabled by mutableStateOf(false)
+    var scheduleStartHour by mutableIntStateOf(22)
+    var scheduleEndHour by mutableIntStateOf(7)
+
+    // Named shortcuts bundling a Space switch + a Focus duration (see Preset in Models.kt).
+    var presets = mutableStateListOf<Preset>()
+
     // Dynamic Spaces
     var spaces = mutableStateListOf<Space>()
 
@@ -71,37 +101,58 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         viewModelScope.launch {
-            dao.getSetting("density_mode")?.let { try { densityMode = DensityMode.valueOf(it) } catch(e: Exception) {} }
-            dao.getSetting("font_size")?.let { fontSizeMultiplier = it.toFloatOrNull() ?: 1.0f }
-            dao.getSetting("letter_spacing")?.let { letterSpacingExtra = it.toFloatOrNull() ?: 0.0f }
-            dao.getSetting("bold_enabled")?.let { isBoldEnabled = it.toBoolean() }
-            dao.getSetting("swipe_down_action")?.let { swipeDownAction = it }
-            dao.getSetting("double_tap_action")?.let { doubleTapAction = it }
-            dao.getSetting("one_thing")?.let { oneThingReflection = it }
-
-            hiddenApps.addAll(dao.getHiddenApps())
-            favoriteApps.addAll(dao.getFavorites())
-
-            dao.getAllFrictionLevels().forEach {
-                appFrictionLevels[it.packageName] = it.level
-            }
-
-            val savedSpaces = dao.getAllSpacesOnce()
-            if (savedSpaces.isEmpty()) {
-                val defaults = listOf(
-                    SpaceEntity("personal", "PERSONAL", "BALANCED"),
-                    SpaceEntity("work", "WORK", "BALANCED")
-                )
-                defaults.forEach { dao.insertSpace(it) }
-                spaces.addAll(defaults.map { Space(it.id, it.name, emptyList()) })
-            } else {
-                spaces.addAll(savedSpaces.map { Space(it.id, it.name, emptyList()) })
-            }
-
+            reloadPersistedState()
             // Load apps asynchronously on IO thread
             loadInstalledApps(application)
             registerPackageChangeReceiver(application)
         }
+    }
+
+    /**
+     * Loads all persisted state from the database into the in-memory/Compose-observable
+     * properties above. Extracted out of init{} so importBackupJson() can call the exact
+     * same logic to refresh the UI after a restore, instead of duplicating it.
+     */
+    private suspend fun reloadPersistedState() {
+        dao.getSetting("density_mode")?.let { try { densityMode = DensityMode.valueOf(it) } catch (e: Exception) {} }
+        dao.getSetting("font_size")?.let { fontSizeMultiplier = it.toFloatOrNull() ?: 1.0f }
+        dao.getSetting("letter_spacing")?.let { letterSpacingExtra = it.toFloatOrNull() ?: 0.0f }
+        dao.getSetting("bold_enabled")?.let { isBoldEnabled = it.toBoolean() }
+        dao.getSetting("swipe_down_action")?.let { swipeDownAction = it }
+        dao.getSetting("double_tap_action")?.let { doubleTapAction = it }
+        dao.getSetting("one_thing")?.let { oneThingReflection = it }
+        dao.getSetting("haptics_enabled")?.let { hapticsEnabled = it.toBoolean() }
+        dao.getSetting("base_color_id")?.let { baseColorId = it }
+        dao.getSetting("accent_color_id")?.let { accentColorId = it }
+        dao.getSetting("dnd_on_focus")?.let { dndOnFocusEnabled = it.toBoolean() }
+        dao.getSetting("schedule_enabled")?.let { scheduleEnabled = it.toBoolean() }
+        dao.getSetting("schedule_start_hour")?.let { scheduleStartHour = it.toIntOrNull() ?: 22 }
+        dao.getSetting("schedule_end_hour")?.let { scheduleEndHour = it.toIntOrNull() ?: 7 }
+
+        hiddenApps.clear()
+        hiddenApps.addAll(dao.getHiddenApps())
+        favoriteApps.clear()
+        favoriteApps.addAll(dao.getFavorites())
+
+        appFrictionLevels.clear()
+        dao.getAllFrictionLevels().forEach { appFrictionLevels[it.packageName] = it.level }
+
+        presets.clear()
+        presets.addAll(dao.getAllPresetsOnce().map { Preset(it.id, it.name, it.focusMinutes, it.spaceId) })
+
+        val savedSpaces = dao.getAllSpacesOnce()
+        spaces.clear()
+        if (savedSpaces.isEmpty()) {
+            val defaults = listOf(
+                SpaceEntity("personal", "PERSONAL", "BALANCED"),
+                SpaceEntity("work", "WORK", "BALANCED")
+            )
+            defaults.forEach { dao.insertSpace(it) }
+            spaces.addAll(defaults.map { Space(it.id, it.name, emptyList()) })
+        } else {
+            spaces.addAll(savedSpaces.map { Space(it.id, it.name, it.allowedApps.split(",").filter { pkg -> pkg.isNotBlank() }) })
+        }
+        if (currentSpaceIndex >= spaces.size) currentSpaceIndex = 0
     }
 
     private suspend fun loadInstalledApps(context: Context) {
@@ -171,7 +222,23 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
         val newSpace = Space(id, name.uppercase(), emptyList())
         spaces.add(newSpace)
         viewModelScope.launch {
-            dao.insertSpace(SpaceEntity(id, name.uppercase(), "BALANCED"))
+            dao.insertSpace(SpaceEntity(id, name.uppercase(), "BALANCED", ""))
+        }
+    }
+
+    /**
+     * Restricts (or un-restricts, if [packages] is empty) which apps appear in the drawer
+     * while this space is active. Previously Space.allowedApps existed as a field but was
+     * never populated or read anywhere -- the App Drawer showed every installed app
+     * regardless of which Space was current.
+     */
+    fun setSpaceAllowedApps(spaceId: String, packages: List<String>) {
+        val index = spaces.indexOfFirst { it.id == spaceId }
+        if (index != -1) {
+            spaces[index] = spaces[index].copy(allowedApps = packages)
+        }
+        viewModelScope.launch {
+            dao.updateSpaceAllowedApps(spaceId, packages.joinToString(","))
         }
     }
 
@@ -187,6 +254,31 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun addPreset(name: String, focusMinutes: Int, spaceId: String) {
+        val id = UUID.randomUUID().toString()
+        presets.add(Preset(id, name, focusMinutes, spaceId))
+        viewModelScope.launch {
+            dao.insertPreset(PresetEntity(id, name, focusMinutes, spaceId))
+        }
+    }
+
+    fun deletePreset(presetId: String) {
+        presets.removeAll { it.id == presetId }
+        viewModelScope.launch {
+            dao.deletePreset(presetId)
+        }
+    }
+
+    /** Switches to the preset's Space (if it names one) and starts its Focus duration --
+     * one tap combining two things that already existed separately. */
+    fun activatePreset(preset: Preset) {
+        if (preset.spaceId.isNotBlank()) {
+            val index = spaces.indexOfFirst { it.id == preset.spaceId }
+            if (index != -1) currentSpaceIndex = index
+        }
+        startFocus(preset.focusMinutes)
+    }
+
     fun updateSetting(key: String, value: String) {
         viewModelScope.launch {
             dao.saveSetting(SettingEntity(key, value))
@@ -196,6 +288,80 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     fun setDensity(mode: DensityMode) {
         densityMode = mode
         updateSetting("density_mode", mode.name)
+    }
+
+    fun setSwipeDownAction(action: String) {
+        swipeDownAction = action
+        updateSetting("swipe_down_action", action)
+    }
+
+    fun setDoubleTapAction(action: String) {
+        doubleTapAction = action
+        updateSetting("double_tap_action", action)
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        hapticsEnabled = enabled
+        updateSetting("haptics_enabled", enabled.toString())
+    }
+
+    fun setBaseColor(colorId: String) {
+        baseColorId = colorId
+        updateSetting("base_color_id", colorId)
+    }
+
+    fun setAccentColor(colorId: String) {
+        accentColorId = colorId
+        updateSetting("accent_color_id", colorId)
+    }
+
+    fun setDndOnFocus(enabled: Boolean) {
+        dndOnFocusEnabled = enabled
+        updateSetting("dnd_on_focus", enabled.toString())
+    }
+
+    fun setScheduleEnabled(enabled: Boolean) {
+        scheduleEnabled = enabled
+        updateSetting("schedule_enabled", enabled.toString())
+    }
+
+    fun setScheduleStartHour(hour: Int) {
+        scheduleStartHour = hour
+        updateSetting("schedule_start_hour", hour.toString())
+    }
+
+    fun setScheduleEndHour(hour: Int) {
+        scheduleEndHour = hour
+        updateSetting("schedule_end_hour", hour.toString())
+    }
+
+    /** Whether the current hour falls inside the configured schedule window. Handles the
+     * window wrapping past midnight (e.g. start=22, end=7 means "10pm through 7am"). */
+    private fun isWithinScheduleWindow(): Boolean {
+        val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return if (scheduleStartHour <= scheduleEndHour) {
+            currentHour in scheduleStartHour until scheduleEndHour
+        } else {
+            currentHour >= scheduleStartHour || currentHour < scheduleEndHour
+        }
+    }
+
+    /** Whether the user has granted the separate "Do Not Disturb access" app-op. This is
+     * NOT a normal runtime permission dialog -- it can only be granted from a system
+     * Settings screen (see Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS). */
+    fun hasDndAccess(): Boolean {
+        val nm = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return nm.isNotificationPolicyAccessGranted
+    }
+
+    private fun setDnd(enabled: Boolean) {
+        val nm = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // No-ops safely if access was never granted, rather than crashing -- matches how
+        // dndOnFocusEnabled can be "on" in settings while the actual OS-level grant is
+        // still pending.
+        if (nm.isNotificationPolicyAccessGranted) {
+            nm.setInterruptionFilter(if (enabled) NotificationManager.INTERRUPTION_FILTER_PRIORITY else NotificationManager.INTERRUPTION_FILTER_ALL)
+        }
     }
 
     fun toggleHideApp(packageName: String) {
@@ -245,13 +411,23 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
     fun startFocus(minutes: Int) {
         focusModeActive = true
         focusTimeRemaining = minutes * 60
+        if (dndOnFocusEnabled) setDnd(true)
         viewModelScope.launch {
             while (focusTimeRemaining > 0 && focusModeActive) {
                 delay(1000)
                 focusTimeRemaining--
             }
             focusModeActive = false
+            if (dndOnFocusEnabled) setDnd(false)
         }
+    }
+
+    /** Manually ends an in-progress Focus session (as opposed to the countdown finishing
+     * naturally). Previously the "END SESSION" button set focusModeActive = false directly
+     * from the widget, which skipped turning DND back off. */
+    fun endFocus() {
+        focusModeActive = false
+        if (dndOnFocusEnabled) setDnd(false)
     }
 
     fun handleAppClick(app: AppInfo, context: Context) {
@@ -280,6 +456,13 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
             }
             "BLOCK" -> {
                 if (focusModeActive) {
+                    pendingAppLaunch = app
+                } else {
+                    launchApp(app.packageName, context)
+                }
+            }
+            "SCHEDULE" -> {
+                if (scheduleEnabled && isWithinScheduleWindow()) {
                     pendingAppLaunch = app
                 } else {
                     launchApp(app.packageName, context)
@@ -356,4 +539,120 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application) 
             else -> false
         }
     }
+
+    /** Serializes all local data (settings, hidden apps, favorites, spaces, friction rules,
+     * tasks) to a JSON string the user can save via Storage Access Framework. Plain
+     * org.json (already used elsewhere, e.g. WeatherWidget) rather than adding a
+     * serialization dependency for this one feature. */
+    suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
+        val json = JSONObject()
+        json.put("version", 1)
+
+        val settingsObj = JSONObject()
+        dao.getAllSettingsOnce().forEach { settingsObj.put(it.key, it.value) }
+        json.put("settings", settingsObj)
+
+        json.put("hiddenApps", JSONArray(hiddenApps.toList()))
+        json.put("favorites", JSONArray(favoriteApps.toList()))
+
+        val spacesArr = JSONArray()
+        spaces.forEach { s ->
+            spacesArr.put(JSONObject().apply {
+                put("id", s.id)
+                put("name", s.name)
+                put("allowedApps", s.allowedApps.joinToString(","))
+            })
+        }
+        json.put("spaces", spacesArr)
+
+        val frictionArr = JSONArray()
+        appFrictionLevels.forEach { (pkg, level) ->
+            frictionArr.put(JSONObject().apply { put("packageName", pkg); put("level", level) })
+        }
+        json.put("friction", frictionArr)
+
+        val presetsArr = JSONArray()
+        presets.forEach { p ->
+            presetsArr.put(JSONObject().apply {
+                put("id", p.id)
+                put("name", p.name)
+                put("focusMinutes", p.focusMinutes)
+                put("spaceId", p.spaceId)
+            })
+        }
+        json.put("presets", presetsArr)
+
+        val tasksArr = JSONArray()
+        dao.getAllTasksOnce().forEach { t ->
+            tasksArr.put(JSONObject().apply {
+                put("text", t.text)
+                put("isCompleted", t.isCompleted)
+                put("spaceId", t.spaceId)
+            })
+        }
+        json.put("tasks", tasksArr)
+
+        json.toString(2)
+    }
+
+    /**
+     * Replaces ALL local data with the contents of a previously exported backup, then
+     * reloads in-memory state so the UI reflects it immediately. Task ids are dropped and
+     * re-autogenerated on import to avoid colliding with any existing rows. Throws if the
+     * JSON is malformed -- callers should catch and show the user an error rather than
+     * silently losing their current data partway through.
+     */
+    suspend fun importBackupJson(jsonStr: String) {
+        val json = JSONObject(jsonStr)
+
+        val tasks = mutableListOf<Task>()
+        json.optJSONArray("tasks")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                tasks.add(Task(text = o.getString("text"), isCompleted = o.optBoolean("isCompleted", false), spaceId = o.optString("spaceId", "personal")))
+            }
+        }
+        val hidden = mutableListOf<HiddenAppEntity>()
+        json.optJSONArray("hiddenApps")?.let { arr -> for (i in 0 until arr.length()) hidden.add(HiddenAppEntity(arr.getString(i))) }
+        val favs = mutableListOf<FavoriteAppEntity>()
+        json.optJSONArray("favorites")?.let { arr -> for (i in 0 until arr.length()) favs.add(FavoriteAppEntity(arr.getString(i))) }
+        val spacesList = mutableListOf<SpaceEntity>()
+        json.optJSONArray("spaces")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                spacesList.add(SpaceEntity(o.getString("id"), o.getString("name"), "BALANCED", o.optString("allowedApps", "")))
+            }
+        }
+        val frictionList = mutableListOf<AppFrictionEntity>()
+        json.optJSONArray("friction")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                frictionList.add(AppFrictionEntity(o.getString("packageName"), o.getString("level")))
+            }
+        }
+        val presetsList = mutableListOf<PresetEntity>()
+        json.optJSONArray("presets")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                presetsList.add(PresetEntity(o.getString("id"), o.getString("name"), o.getInt("focusMinutes"), o.optString("spaceId", "")))
+            }
+        }
+        val settingsList = mutableListOf<SettingEntity>()
+        json.optJSONObject("settings")?.let { obj ->
+            obj.keys().asSequence().forEach { key -> settingsList.add(SettingEntity(key, obj.getString(key))) }
+        }
+
+        withContext(Dispatchers.IO) {
+            dao.replaceAllData(tasks, hidden, favs, spacesList, frictionList, presetsList, settingsList)
+        }
+
+        reloadPersistedState()
+    }
+}
+
+/** Fires haptic feedback only if the user has haptics enabled (Settings > Haptics).
+ * Centralizes what were previously ~9 raw view.performHapticFeedback(...) call sites
+ * across MainActivity/Widgets with no way to disable them. */
+fun View.hapticFeedback(type: Int, viewModel: AnchorViewModel) {
+    if (viewModel.hapticsEnabled) performHapticFeedback(type)
 }

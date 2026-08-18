@@ -15,6 +15,7 @@ import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -39,14 +40,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** Shared small label style used by nearly every widget row -- pulled out so the
- * fontSize/letterSpacing/color triplet isn't repeated (and easy to drift) five times. */
+/** Shared small label style used by nearly every widget row -- now sourced from
+ * AnchorType.label so it matches the same "eyebrow" style used for Settings section
+ * headers and the App Drawer's FAVORITES/RECENT/ALL APPS labels, instead of being its
+ * own slightly-different one-off (10sp/1sp vs the 11sp/2sp used elsewhere). */
 @Composable
 private fun WidgetLabel(text: String) {
     Text(
         text = text,
-        fontSize = 10.sp,
-        letterSpacing = 1.sp,
+        style = AnchorType.label,
         color = MaterialTheme.colorScheme.secondary
     )
 }
@@ -257,15 +259,13 @@ fun WeatherWidget() {
 
 @Composable
 fun ReflectionWidget(viewModel: AnchorViewModel) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm)) {
         Text(
             text = stringResource(R.string.one_thing_title),
-            fontSize = 10.sp,
-            letterSpacing = 2.sp,
-            color = MaterialTheme.colorScheme.secondary,
-            fontWeight = FontWeight.Bold
+            style = AnchorType.label,
+            color = MaterialTheme.colorScheme.secondary
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(Spacing.xs))
         Text(
             text = if (viewModel.oneThingReflection.isBlank()) stringResource(R.string.one_thing_placeholder) else viewModel.oneThingReflection,
             fontSize = 16.sp,
@@ -282,7 +282,7 @@ fun BreathingAnimationBox(timeLeft: Int) {
         initialValue = 0.85f,
         targetValue = 1.25f,
         animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearOutSlowInEasing),
+            animation = tween(Motion.breath, easing = Motion.calmEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "scale"
@@ -298,7 +298,7 @@ fun BreathingAnimationBox(timeLeft: Int) {
 }
 
 @Composable
-fun BreathingWidget() {
+fun BreathingWidget(viewModel: AnchorViewModel) {
     var isRunning by remember { mutableStateOf(false) }
     var timeLeft by remember { mutableIntStateOf(60) }
     val view = LocalView.current
@@ -311,22 +311,26 @@ fun BreathingWidget() {
             }
             isRunning = false
             timeLeft = 60
-            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            view.hapticFeedback(HapticFeedbackConstants.LONG_PRESS, viewModel)
         }
     }
 
+    // A hairline border instead of Material elevation/shadow -- shadows read oddly against
+    // true OLED black, while a quiet ~8% white line gives the card a defined edge without
+    // fighting the "calm" aesthetic.
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, AnchorSurfaceBorder)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.breathing_title), fontSize = 10.sp, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.secondary)
-                Spacer(modifier = Modifier.height(2.dp))
+                Text(stringResource(R.string.breathing_title), style = AnchorType.label, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(Spacing.xxs))
                 Text(
                     text = if (isRunning) stringResource(R.string.breathing_active) else stringResource(R.string.breathing_idle),
                     fontSize = 14.sp,
@@ -339,7 +343,7 @@ fun BreathingWidget() {
             } else {
                 TextButton(onClick = {
                     isRunning = true
-                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    view.hapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK, viewModel)
                 }) {
                     Text(stringResource(R.string.start), color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, letterSpacing = 1.sp)
                 }
@@ -355,15 +359,16 @@ fun FocusWidget(viewModel: AnchorViewModel) {
         val mins = viewModel.focusTimeRemaining / 60
         val secs = viewModel.focusTimeRemaining % 60
         Column(modifier = Modifier.fillMaxWidth()) {
+            // Tertiary gold reserved for exactly this kind of moment -- an in-progress
+            // Focus session -- rather than the neutral primary/secondary used everywhere else.
             Text(
                 text = stringResource(R.string.focus_active_label, mins, secs),
-                fontSize = 10.sp,
-                letterSpacing = 1.sp,
-                color = MaterialTheme.colorScheme.primary
+                style = AnchorType.label,
+                color = MaterialTheme.colorScheme.tertiary
             )
             TextButton(onClick = {
-                viewModel.focusModeActive = false
-                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                viewModel.endFocus()
+                view.hapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK, viewModel)
             }) {
                 Text(stringResource(R.string.end_session), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
             }
@@ -376,10 +381,36 @@ fun FocusWidget(viewModel: AnchorViewModel) {
             listOf(10, 25, 60).forEach { mins ->
                 TextButton(onClick = {
                     viewModel.startFocus(mins)
-                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    view.hapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK, viewModel)
                 }) {
-                    Text(stringResource(R.string.focus_duration_label, mins), fontSize = 10.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.secondary)
+                    Text(stringResource(R.string.focus_duration_label, mins), style = AnchorType.label, color = MaterialTheme.colorScheme.secondary)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Row of one-tap Preset shortcuts (see Preset in Models.kt / addPreset in AnchorViewModel).
+ * Deliberately renders nothing when there are no presets, rather than an empty row or an
+ * "add one" prompt -- presets are created from Settings, and a widget on the home surface
+ * nudging the user toward a settings screen would work against the app's calm/minimal
+ * intent. It simply appears once the user has actually made one.
+ */
+@Composable
+fun PresetsWidget(viewModel: AnchorViewModel) {
+    if (viewModel.presets.isEmpty()) return
+    val view = LocalView.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        viewModel.presets.forEach { preset ->
+            TextButton(onClick = {
+                viewModel.activatePreset(preset)
+                view.hapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK, viewModel)
+            }) {
+                Text(preset.name.uppercase(), style = AnchorType.label, color = MaterialTheme.colorScheme.secondary)
             }
         }
     }
